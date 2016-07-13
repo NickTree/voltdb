@@ -594,7 +594,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             new SpProcedureTask(m_mailbox, procedureName, m_pendingTasks, msg, m_drGateway);
         if (!shortcutRead) {
             if (traceName != null) {
-                VoltTrace.beginAsync(traceName, "durability", "spi", msg.getSpHandle(),
+                VoltTrace.beginAsync(traceName,
+                                     "durability " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", msg.getSpHandle(),
                                      "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                      "partition", Integer.toString(m_partitionId));
             }
@@ -776,7 +777,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         Iv2Trace.logFragmentTaskMessage(message.getFragmentTaskMessage(),
                 m_mailbox.getHSId(), newSpHandle, true);
         if (message.getFragmentTaskMessage().getTraceName() != null) {
-            VoltTrace.beginAsync(message.getFragmentTaskMessage().getTraceName(), "recvFragment", "spi", newSpHandle,
+            VoltTrace.beginAsync(message.getFragmentTaskMessage().getTraceName(),
+                                 "recvFragment " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", newSpHandle,
                                  "txnId", TxnEgo.txnIdToString(message.getTxnId()),
                                  "partition", Integer.toString(m_partitionId),
                                  "hsId", CoreUtils.hsIdToString(m_mailbox.getHSId()));
@@ -900,7 +902,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     {
         if (msg.getTraceName() != null) {
             VoltTrace.meta(msg.getTraceName(), "process_name", "name", CoreUtils.getHostnameOrAddress());
-            VoltTrace.beginAsync(msg.getTraceName(), "recvFragment", "spi", msg.getSpHandle(),
+            VoltTrace.beginAsync(msg.getTraceName(),
+                                 "recvFragment " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", msg.getSpHandle(),
                                  "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                  "partition", Integer.toString(m_partitionId),
                                  "hsId", CoreUtils.hsIdToString(m_mailbox.getHSId()),
@@ -945,7 +948,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         }
         if (logThis) {
             if (msg.getTraceName() != null) {
-                VoltTrace.beginAsync(msg.getTraceName(), "durability", "spi", msg.getSpHandle(),
+                VoltTrace.beginAsync(msg.getTraceName(),
+                                     "durability " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", msg.getSpHandle(),
                                      "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                      "partition", Integer.toString(m_partitionId));
             }
@@ -991,12 +995,12 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                     final Iv2InitiateTaskMessage msg = (Iv2InitiateTaskMessage) task.getTransactionState().getNotice();
                     if (msg.getStoredProcedureInvocation().getTraceName() != null) {
                         VoltTrace.instantAsync(msg.getStoredProcedureInvocation().getTraceName(),
-                                               "durability", "spi", msg.getSpHandle());
+                                               "durability " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", msg.getSpHandle());
                     }
                 } else if (task instanceof FragmentTask) {
                     if (((FragmentTask) task).m_fragmentMsg.getTraceName() != null) {
                         VoltTrace.instantAsync(((FragmentTask) task).m_fragmentMsg.getTraceName(),
-                                               "durability", "spi", ((FragmentTask) task).m_fragmentMsg.getSpHandle());
+                                               "durability " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", ((FragmentTask) task).m_fragmentMsg.getSpHandle());
                     }
                 }
 
@@ -1031,7 +1035,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         final TransactionState txnState = m_outstandingTxns.get(message.getTxnId());
         if (txnState != null && ((FragmentTaskMessage) txnState.getNotice()).getTraceName() != null) {
             VoltTrace.endAsync(((FragmentTaskMessage) txnState.getNotice()).getTraceName(),
-                                 "recvFragment", "spi", message.getSpHandle(),
+                                 "recvFragment " + CoreUtils.hsIdToString(m_mailbox.getHSId()), "spi", message.getSpHandle(),
                                "status", Byte.toString(message.getStatusCode()));
         }
 
