@@ -1036,11 +1036,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
     public void handleFragmentResponseMessage(FragmentResponseMessage message)
     {
         final TransactionState txnState = m_outstandingTxns.get(message.getTxnId());
-        if (txnState != null && ((FragmentTaskMessage) txnState.getNotice()).getTraceName() != null) {
-            VoltTrace.endAsync(((FragmentTaskMessage) txnState.getNotice()).getTraceName(),
-                                 "recvFragment", "spi", MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), message.getSpHandle()),
-                               "status", Byte.toString(message.getStatusCode()));
-        }
 
         // Send the message to the duplicate counter, if any
         DuplicateCounter counter =
@@ -1058,6 +1053,13 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                 // MPI is tracking deps per partition HSID.  We need to make
                 // sure we write ours into the message getting sent to the MPI
                 resp.setExecutorSiteId(m_mailbox.getHSId());
+
+                if (txnState != null && ((FragmentTaskMessage) txnState.getNotice()).getTraceName() != null) {
+                    VoltTrace.endAsync(((FragmentTaskMessage) txnState.getNotice()).getTraceName(),
+                                       "recvFragment", "spi", MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), message.getSpHandle()),
+                                       "status", Byte.toString(resp.getStatusCode()));
+                }
+
                 m_mailbox.send(counter.m_destinationId, resp);
             }
             else if (result == DuplicateCounter.MISMATCH) {
@@ -1087,6 +1089,12 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                 }
 
             }
+        }
+
+        if (txnState != null && ((FragmentTaskMessage) txnState.getNotice()).getTraceName() != null) {
+            VoltTrace.endAsync(((FragmentTaskMessage) txnState.getNotice()).getTraceName(),
+                               "recvFragment", "spi", MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), message.getSpHandle()),
+                               "status", Byte.toString(message.getStatusCode()));
         }
 
         m_mailbox.send(message.getDestinationSiteId(), message);
