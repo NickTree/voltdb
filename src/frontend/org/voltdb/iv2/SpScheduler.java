@@ -727,6 +727,9 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (message.isReadOnly()) {
             if (message.getTraceName() != null) {
                 VoltTrace.endAsync(message.getTraceName(), "initSP", "spi", message.getTxnId());
+                if (CoreUtils.getHostIdFromHSId(message.getInitiatorHSId()) != CoreUtils.getHostIdFromHSId(m_mailbox.getHSId())) {
+                    VoltTrace.close(message.getTraceName());
+                }
             }
 
             if (m_defaultConsistencyReadLevel == ReadLevel.FAST) {
@@ -752,6 +755,9 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             if (result == DuplicateCounter.DONE) {
                 if (message.getTraceName() != null) {
                     VoltTrace.endAsync(message.getTraceName(), "initSP", "spi", message.getTxnId());
+                    if (CoreUtils.getHostIdFromHSId(counter.m_destinationId) != CoreUtils.getHostIdFromHSId(m_mailbox.getHSId())) {
+                        VoltTrace.close(message.getTraceName());
+                    }
                 }
                 m_duplicateCounters.remove(dcKey);
                 setRepairLogTruncationHandle(spHandle);
@@ -764,6 +770,9 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         else {
             if (message.getTraceName() != null) {
                 VoltTrace.endAsync(message.getTraceName(), "initSP", "spi", message.getTxnId());
+                if (CoreUtils.getHostIdFromHSId(message.getInitiatorHSId()) != CoreUtils.getHostIdFromHSId(m_mailbox.getHSId())) {
+                    VoltTrace.close(message.getTraceName());
+                }
             }
             // the initiatorHSId is the ClientInterface mailbox.
             // this will be on SPI without k-safety or replica only with k-safety
