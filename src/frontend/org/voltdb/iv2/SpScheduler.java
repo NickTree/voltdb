@@ -66,6 +66,7 @@ import com.google_voltpatches.common.primitives.Ints;
 import com.google_voltpatches.common.primitives.Longs;
 import com.google_voltpatches.common.util.concurrent.ListenableFuture;
 import com.google_voltpatches.common.util.concurrent.SettableFuture;
+import org.voltdb.utils.MiscUtils;
 import org.voltdb.utils.VoltTrace;
 
 public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
@@ -595,7 +596,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (!shortcutRead) {
             if (traceName != null) {
                 VoltTrace.beginAsync(traceName,
-                                     "durability", "spi", CoreUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()),
+                                     "durability", "spi", MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()),
                                      "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                      "partition", Integer.toString(m_partitionId));
             }
@@ -949,7 +950,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (logThis) {
             if (msg.getTraceName() != null) {
                 VoltTrace.beginAsync(msg.getTraceName(),
-                                     "durability", "spi", CoreUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()),
+                                     "durability", "spi", MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()),
                                      "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                      "partition", Integer.toString(m_partitionId));
             }
@@ -996,13 +997,13 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
                     if (msg.getStoredProcedureInvocation().getTraceName() != null) {
                         VoltTrace.instantAsync(msg.getStoredProcedureInvocation().getTraceName(),
                                                "durability", "spi",
-                                               CoreUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()));
+                                               MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle()));
                     }
                 } else if (task instanceof FragmentTask) {
                     if (((FragmentTask) task).m_fragmentMsg.getTraceName() != null) {
                         VoltTrace.instantAsync(((FragmentTask) task).m_fragmentMsg.getTraceName(),
                                                "durability", "spi",
-                                               CoreUtils.hsIdTxnIdToString(m_mailbox.getHSId(), ((FragmentTask) task).m_fragmentMsg.getSpHandle()));
+                                               MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), ((FragmentTask) task).m_fragmentMsg.getSpHandle()));
                     }
                 }
 
