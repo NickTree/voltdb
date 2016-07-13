@@ -929,6 +929,7 @@ public class ClientInterface implements SnapshotDaemon.DaemonInitiator {
                 VoltTrace.endAsync(clientData.m_traceName, "recvTxn", "ci", clientData.m_clientHandle,
                                    "status", Byte.toString(clientResponse.getStatus()),
                                    "statusString", clientResponse.getStatusString());
+                VoltTrace.close(clientData.m_traceName);
             }
 
             clientResponse.setClientHandle(clientData.m_clientHandle);
@@ -1373,6 +1374,7 @@ public class ClientInterface implements SnapshotDaemon.DaemonInitiator {
             VoltTrace.endAsync(task.getTraceName(), "recvTxn", "ci", task.getClientHandle(),
                                "status", Byte.toString(errResp.getStatus()),
                                "statusString", errResp.getStatusString());
+            VoltTrace.close(task.getTraceName());
         }
 
         return errResp;
