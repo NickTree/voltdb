@@ -733,8 +733,11 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
          * confirmation or communication with other replicas. In a partition scenario, it's
          * possible to read an unconfirmed transaction's writes that will be lost.
          */
+        final long spHandle = message.getSpHandle();
+        final DuplicateCounterKey dcKey = new DuplicateCounterKey(message.getTxnId(), spHandle);
+        DuplicateCounter counter = m_duplicateCounters.get(dcKey);
         final String traceId;
-        if (message.getTraceName() != null) {
+        if (counter != null && counter.getInvocation().getTraceName() != null) {
             traceId = MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), message.m_sourceHSId, message.getSpHandle());
         } else {
             traceId = null;
@@ -763,16 +766,13 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             }
         }
 
-        final long spHandle = message.getSpHandle();
-        final DuplicateCounterKey dcKey = new DuplicateCounterKey(message.getTxnId(), spHandle);
-        DuplicateCounter counter = m_duplicateCounters.get(dcKey);
         if (counter != null) {
-            if (message.getTraceName() != null) {
+            if (counter.getInvocation().getTraceName() != null) {
                 String traceName = "initSP";
                 if (message.m_sourceHSId != m_mailbox.getHSId()) {
                     traceName = "replicateSP";
                 }
-                VoltTrace.endAsync(message.getTraceName(), traceName, "spi", traceId);
+                VoltTrace.endAsync(counter.getInvocation().getTraceName(), traceName, "spi", traceId);
             }
 
             int result = counter.offer(message);
