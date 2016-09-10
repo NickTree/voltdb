@@ -19,6 +19,7 @@ package org.json_voltpatches;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.util.HashSet;
 
 /*
 Copyright (c) 2006 JSON.org
@@ -92,10 +93,19 @@ public class JSONWriter {
      */
     private char m_mode;
 
+    /* Since
+        private final HashSet<String> m_scopeStack[] = new HashSet<String>[MAX_DEPTH];
+    gives
+        error: generic array creation
+    instantiate an array of a trivially compatible class instead of the generic.
+    */
+    private static class HashSetOfString extends HashSet<String> {
+        private static final long serialVersionUID = 1L; // don't care
+    };
     /**
      * The object/array scope stack.
      */
-    private final JSONObject m_scopeStack[] = new JSONObject[MAX_DEPTH];
+    private final HashSet<String> m_scopeStack[] = new HashSetOfString[MAX_DEPTH];
 
     /**
      * The stack top index. A value of -1 indicates that the stack is empty.
@@ -150,11 +160,11 @@ public class JSONWriter {
 
     /**
      * Push an array or object scope.
-     * @param scope The scope's initial state.
+     * @param boolean Whether the scope should detect key duplication.
      * @param opener
      * @throws JSONException If nesting is too deep.
      */
-    private void push(JSONObject scope, String opener) throws JSONException {
+    private void push(boolean object, String opener) throws JSONException {
         m_top += 1;
         if (m_top >= MAX_DEPTH) {
             throw new JSONException("Nesting too deep.");
@@ -165,8 +175,8 @@ public class JSONWriter {
         catch (IOException e) {
             throw new JSONException(e);
         }
-        m_scopeStack[m_top] = scope;
-        m_mode = (scope == null) ? 'a' : 'k';
+        m_scopeStack[m_top] = object ? new HashSetOfString() : null;
+        m_mode = object ? 'a' : 'k';
         m_comma = false;
     }
 
@@ -203,7 +213,7 @@ public class JSONWriter {
         if (m_mode == 'k' || m_mode == 'd' || m_mode == 'i') {
             throw new JSONException("Misplaced array.");
         }
-        push(null, m_comma ? ",[" : "[");
+        push(false, m_comma ? ",[" : "[");
         return this;
     }
 
@@ -234,7 +244,7 @@ public class JSONWriter {
         if (m_mode == 'k' || m_mode == 'd') {
             throw new JSONException("Misplaced object.");
         }
-        push(new JSONObject(), m_comma ? ",{" : "{");
+        push(true, m_comma ? ",{" : "{");
         return this;
     }
 
@@ -269,7 +279,9 @@ public class JSONWriter {
         }
         try {
             // Throw if the key has already been seen in this scope.
-            m_scopeStack[m_top].putOnce(string, Boolean.TRUE);
+            if ( ! m_scopeStack[m_top].add(string)) {
+                throw new JSONException("Duplicate key \"" + string + "\"");
+            }
             if (m_comma) {
                 m_writer.write(',');
             }

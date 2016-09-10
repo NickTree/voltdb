@@ -87,11 +87,11 @@ function _benchmark() {
     srccompile
     java -classpath obj:$CLASSPATH:obj -Dlog4j.configuration=file://$LOG4J \
         ${APPNAME}.Benchmark \
-        --displayinterval=5 \
+        --displayinterval=10 \
         --servers=localhost \
-        --configfile=cachefriendlyconfig.xml \
+        --configfile=config.xml \
         --warmup=5 \
-        --duration=60 \
+        --duration=240 \
         --test=$1 \
         --querythrottle=30
                            ## \
