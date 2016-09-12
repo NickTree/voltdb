@@ -20,7 +20,6 @@ package org.voltdb.jni;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -590,14 +589,18 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
             m_logDuration = INITIAL_LOG_DURATION;
             m_sqlTexts = sqlTexts;
 
-            VoltTrace.add(() -> VoltTrace.beginDuration("execplanfragment", VoltTrace.Category.SPSITE,
-                                                        "txnId", TxnEgo.txnIdToString(txnId),
-                                                        "partition", Integer.toString(m_partitionId)));
+            if (traceOn) {
+                VoltTrace.add(() -> VoltTrace.beginDuration("execplanfragment", VoltTrace.Category.SPSITE,
+                                                            "txnId", TxnEgo.txnIdToString(txnId),
+                                                            "partition", Integer.toString(m_partitionId)));
+            }
 
             VoltTable[] results = coreExecutePlanFragments(numFragmentIds, planFragmentIds, inputDepIds,
                     parameterSets, txnId, spHandle, lastCommittedSpHandle, uniqueId, undoQuantumToken, traceOn);
 
-            VoltTrace.add(VoltTrace::endDuration);
+            if (traceOn) {
+                VoltTrace.add(VoltTrace::endDuration);
+            }
 
             m_plannerStats.updateEECacheStats(m_eeCacheSize, numFragmentIds - m_cacheMisses,
                     m_cacheMisses, m_partitionId);

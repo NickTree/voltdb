@@ -285,7 +285,7 @@ public class FragmentTask extends TransactionTask
                         m_txnState.m_spHandle,
                         m_txnState.uniqueId,
                         m_txnState.isReadOnly(),
-                        true)[0];
+                        ProcedureRunner.ENABLE_BATCH_TRACE)[0];
 
                 if (hostLog.isTraceEnabled()) {
                     hostLog.l7dlog(Level.TRACE,
