@@ -153,8 +153,8 @@ public class ClientInterfaceHandleManager
         return new ClientInterfaceHandleManager(isAdmin, connection, callback, acg) {
             @Override
             synchronized long getHandle(boolean isSinglePartition, int partitionId,
-                    long clientHandle, int messageSize, long creationTimeNanos, String procName,
-                    long initiatorHSId, boolean readOnly, boolean isShortCircuitRead) {
+                    long clientHandle, int messageSize, long creationTimeNanos, String procName, long initiatorHSId,
+                    boolean readOnly, boolean isShortCircuitRead) {
                 return super.getHandle(isSinglePartition, partitionId,
                         clientHandle, messageSize, creationTimeNanos, procName, initiatorHSId, readOnly, isShortCircuitRead);
             }

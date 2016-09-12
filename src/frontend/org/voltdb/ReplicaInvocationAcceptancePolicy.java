@@ -40,7 +40,7 @@ public class ReplicaInvocationAcceptancePolicy extends InvocationValidationPolic
             if (!isOn) {
                 return new ClientResponseImpl(ClientResponseImpl.UNEXPECTED_FAILURE,
                         new VoltTable[0],
-                        "Master cluster rejected dragent transaction " + invocation.getProcName()
+                        "Master cluster rejected dragent transaction " + invocation.procName
                         + ". A DR master cluster will not accept transactions from the dragent.",
                         invocation.clientHandle);
             }
@@ -49,7 +49,7 @@ public class ReplicaInvocationAcceptancePolicy extends InvocationValidationPolic
                 // This should be impossible since the dragent isn't passed read-only txns.
                 return new ClientResponseImpl(ClientResponseImpl.UNEXPECTED_FAILURE,
                         new VoltTable[0],
-                        "Read-only procedure " + invocation.getProcName() +
+                        "Read-only procedure " + invocation.procName +
                         " was not replayed on replica cluster. " +
                         "Reads are not replicated across DR connections.",
                         invocation.clientHandle);
@@ -65,7 +65,7 @@ public class ReplicaInvocationAcceptancePolicy extends InvocationValidationPolic
 
             // This path is only executed before the AdHoc statement is run through the planner. After the
             // Planner, the client interface will figure out what kind of statement this is.
-            if (invocation.getProcName().equals("@AdHoc")) {
+            if (invocation.procName.equals("@AdHoc")) {
                 return null;
             }
 
@@ -74,7 +74,7 @@ public class ReplicaInvocationAcceptancePolicy extends InvocationValidationPolic
             } else {
                 return new ClientResponseImpl(ClientResponseImpl.UNEXPECTED_FAILURE,
                         new VoltTable[0],
-                        "Write procedure " + invocation.getProcName() +
+                        "Write procedure " + invocation.procName +
                         " is not allowed in replica cluster",
                         invocation.clientHandle);
             }

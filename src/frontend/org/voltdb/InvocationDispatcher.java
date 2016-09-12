@@ -274,7 +274,7 @@ public final class InvocationDispatcher {
         Procedure catProc = getProcedureFromName(task.getProcName(), catalogContext);
 
         if (catProc == null) {
-            String errorMessage = "Procedure " + task.getProcName() + " was not found";
+            String errorMessage = "Procedure " + task.procName + " was not found";
             RateLimitedLogger.tryLogForMessage(EstTime.currentTimeMillis(),
                             60, TimeUnit.SECONDS, authLog, Level.WARN,
                             errorMessage + ". This message is rate limited to once every 60 seconds."
@@ -290,11 +290,11 @@ public final class InvocationDispatcher {
 
         ClientResponseImpl error = null;
         //Check permissions
-        if ((error = m_permissionValidator.shouldAccept(task.getProcName(), user, task, catProc)) != null) {
+        if ((error = m_permissionValidator.shouldAccept(task.procName, user, task, catProc)) != null) {
             return error;
         }
         //Check param deserialization policy for sysprocs
-        if ((error = m_invocationValidator.shouldAccept(task.getProcName(), user, task, catProc)) != null) {
+        if ((error = m_invocationValidator.shouldAccept(task.procName, user, task, catProc)) != null) {
             return error;
         }
 
@@ -323,52 +323,52 @@ public final class InvocationDispatcher {
 
             // ping just responds as fast as possible to show the connection is alive
             // nb: ping is not a real procedure, so this is checked before other "sysprocs"
-            if ("@Ping".equals(task.getProcName())) {
+            if ("@Ping".equals(task.procName)) {
                 return new ClientResponseImpl(ClientResponseImpl.SUCCESS, new VoltTable[0], "", task.clientHandle);
             }
             // ExecuteTask is an internal procedure, not for public use.
-            else if ("@ExecuteTask".equals(task.getProcName())) {
+            else if ("@ExecuteTask".equals(task.procName)) {
                 return unexpectedFailureResponse(
                         "@ExecuteTask is a reserved procedure only for VoltDB internal use", task.clientHandle);
             }
-            else if ("@GetPartitionKeys".equals(task.getProcName())) {
+            else if ("@GetPartitionKeys".equals(task.procName)) {
                 return dispatchGetPartitionKeys(task);
             }
-            else if ("@Subscribe".equals(task.getProcName())) {
+            else if ("@Subscribe".equals(task.procName)) {
                 return dispatchSubscribe( handler, task);
             }
-            else if ("@Statistics".equals(task.getProcName())) {
+            else if ("@Statistics".equals(task.procName)) {
                 return dispatchStatistics(OpsSelector.STATISTICS, task, ccxn);
             }
-            else if ("@SystemCatalog".equals(task.getProcName())) {
+            else if ("@SystemCatalog".equals(task.procName)) {
                 return dispatchStatistics(OpsSelector.SYSTEMCATALOG, task, ccxn);
             }
-            else if ("@SystemInformation".equals(task.getProcName())) {
+            else if ("@SystemInformation".equals(task.procName)) {
                 return dispatchStatistics(OpsSelector.SYSTEMINFORMATION, task, ccxn);
             }
-            else if ("@GC".equals(task.getProcName())) {
+            else if ("@GC".equals(task.procName)) {
                 return dispatchSystemGC(handler, task);
             }
-            else if ("@StopNode".equals(task.getProcName())) {
+            else if ("@StopNode".equals(task.procName)) {
                 return dispatchStopNode(task);
             }
-            else if ("@Explain".equals(task.getProcName())) {
+            else if ("@Explain".equals(task.procName)) {
                 return dispatchAdHoc(task, handler, ccxn, true, user);
             }
-            else if ("@ExplainProc".equals(task.getProcName())) {
+            else if ("@ExplainProc".equals(task.procName)) {
                 return dispatchExplainProcedure(task, handler, ccxn, user);
             }
-            else if ("@SendSentinel".equals(task.getProcName())) {
+            else if ("@SendSentinel".equals(task.procName)) {
                 dispatchSendSentinel(handler.connectionId(), nowNanos, task);
                 return null;
             }
-            else if ("@AdHoc".equals(task.getProcName())) {
+            else if ("@AdHoc".equals(task.procName)) {
                 return dispatchAdHoc(task, handler, ccxn, false, user);
             }
-            else if ("@AdHocSpForTest".equals(task.getProcName())) {
+            else if ("@AdHocSpForTest".equals(task.procName)) {
                 return dispatchAdHocSpForTest(task, handler, ccxn, false, user);
             }
-            else if ("@LoadMultipartitionTable".equals(task.getProcName())) {
+            else if ("@LoadMultipartitionTable".equals(task.procName)) {
                 /*
                  * For IV2 DR: This will generate a sentinel for each partition,
                  * but doesn't initiate the invocation. It will fall through to
@@ -378,7 +378,7 @@ public final class InvocationDispatcher {
                     sendSentinelsToAllPartitions(task.getOriginalTxnId());
                 }
             }
-            else if (task.getProcName().equals("@LoadSinglepartitionTable")) {
+            else if (task.procName.equals("@LoadSinglepartitionTable")) {
                 // FUTURE: When we get rid of the legacy hashinator, this should go away
                 return dispatchLoadSinglepartitionTable(catProc, task, handler, ccxn);
             }
@@ -386,42 +386,42 @@ public final class InvocationDispatcher {
             // ERROR MESSAGE FOR PRO SYSPROC USE IN COMMUNITY
 
             if (!MiscUtils.isPro()) {
-                SystemProcedureCatalog.Config sysProcConfig = SystemProcedureCatalog.listing.get(task.getProcName());
+                SystemProcedureCatalog.Config sysProcConfig = SystemProcedureCatalog.listing.get(task.procName);
                 if ((sysProcConfig != null) && (sysProcConfig.commercial)) {
                     return new ClientResponseImpl(ClientResponseImpl.GRACEFUL_FAILURE,
-                                                  new VoltTable[0],
-                                                  task.getProcName() + " is available in the Enterprise Edition of VoltDB only.",
-                                                  task.clientHandle);
+                            new VoltTable[0],
+                            task.procName + " is available in the Enterprise Edition of VoltDB only.",
+                            task.clientHandle);
                 }
             }
             final boolean useDdlSchema = catalogContext.cluster.getUseddlschema();
-            if ("@UpdateApplicationCatalog".equals(task.getProcName())) {
+            if ("@UpdateApplicationCatalog".equals(task.procName)) {
                 return dispatchUpdateApplicationCatalog(task, handler, ccxn, user, useDdlSchema);
             }
-            else if ("@UpdateClasses".equals(task.getProcName())) {
+            else if ("@UpdateClasses".equals(task.procName)) {
                 return dispatchUpdateApplicationCatalog(task, handler, ccxn, user, useDdlSchema);
             }
-            else if ("@SnapshotSave".equals(task.getProcName())) {
+            else if ("@SnapshotSave".equals(task.procName)) {
                 m_snapshotDaemon.requestUserSnapshot(task, ccxn);
                 return null;
             }
-            else if ("@Promote".equals(task.getProcName())) {
+            else if ("@Promote".equals(task.procName)) {
                 return dispatchPromote(catProc, task, handler, ccxn);
             }
-            else if ("@SnapshotStatus".equals(task.getProcName())) {
+            else if ("@SnapshotStatus".equals(task.procName)) {
                 // SnapshotStatus is really through @Statistics now, but preserve the
                 // legacy calling mechanism
                 Object[] params = new Object[] { "SNAPSHOTSTATUS" };
                 task.setParams(params);
                 return dispatchStatistics(OpsSelector.STATISTICS, task, ccxn);
             }
-            else if ("@SnapshotScan".equals(task.getProcName())) {
+            else if ("@SnapshotScan".equals(task.procName)) {
                 return dispatchStatistics(OpsSelector.SNAPSHOTSCAN, task, ccxn);
             }
-            else if ("@SnapshotDelete".equals(task.getProcName())) {
+            else if ("@SnapshotDelete".equals(task.procName)) {
                 return dispatchStatistics(OpsSelector.SNAPSHOTDELETE, task, ccxn);
             }
-            else if ("@SnapshotRestore".equals(task.getProcName())) {
+            else if ("@SnapshotRestore".equals(task.procName)) {
                 ClientResponseImpl retval = SnapshotUtil.transformRestoreParamsToJSON(task);
                 if (retval != null) {
                     return retval;
@@ -436,9 +436,9 @@ public final class InvocationDispatcher {
 
         // Verify that admin mode sysprocs are called from a client on the
         // admin port, otherwise return a failure
-        if (("@Pause".equals(task.getProcName()) || "@Resume".equals(task.getProcName())) && !handler.isAdmin()) {
+        if (("@Pause".equals(task.procName) || "@Resume".equals(task.procName)) && !handler.isAdmin()) {
             return unexpectedFailureResponse(
-            task.getProcName() + " is not available to this client",
+            task.procName + " is not available to this client",
             task.clientHandle);
         }
 
@@ -513,7 +513,7 @@ public final class InvocationDispatcher {
 
         // If we got here, instance is paused and handler is not admin.
         if (procedure.getSystemproc() &&
-                ("@AdHoc".equals(invocation.getProcName()) || "@AdHocSpForTest".equals(invocation.getProcName()))) {
+                ("@AdHoc".equals(invocation.procName) || "@AdHocSpForTest".equals(invocation.procName))) {
             // AdHoc is handled after it is planned and we figure out if it is read-only or not.
             return true;
         } else {
@@ -920,14 +920,14 @@ public final class InvocationDispatcher {
         String deploymentString = (String) paramArray[1];
         LocalObjectMessage work = new LocalObjectMessage(
                 new CatalogChangeWork(
-                                     m_siteId,
-                                     task.clientHandle, ccxn.connectionId(), ccxn.getHostnameAndIPAndPort(),
-                                     isAdmin, ccxn, catalogBytes, deploymentString,
-                                     task.getProcName(), task.type, task.originalTxnId, task.originalUniqueId,
-                                     VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
-                                     useDdlSchema,
-                                     m_adhocCompletionHandler, user,
-                                     null, -1L, -1L
+                    m_siteId,
+                    task.clientHandle, ccxn.connectionId(), ccxn.getHostnameAndIPAndPort(),
+                    isAdmin, ccxn, catalogBytes, deploymentString,
+                    task.procName, task.type, task.originalTxnId, task.originalUniqueId,
+                    VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
+                    useDdlSchema,
+                    m_adhocCompletionHandler, user,
+                    null, -1L, -1L
                     ));
 
         m_mailbox.send(m_plannerSiteId, work);
@@ -1114,16 +1114,16 @@ public final class InvocationDispatcher {
         String[] stmtsArray = sqlStatements.toArray(new String[sqlStatements.size()]);
 
         AdHocPlannerWork ahpw = new AdHocPlannerWork(
-                                                    m_siteId,
-                                                    task.clientHandle, handler.connectionId(),
-                                                    handler.isAdmin(), ccxn,
-                                                    sql, stmtsArray, userParams, null, explainMode,
-                                                    userPartitionKey == null, userPartitionKey,
-                                                    task.getProcName(), task.type, task.originalTxnId, task.originalUniqueId,
-                                                    task.getBatchTimeout(),
-                                                    VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
-                                                    VoltDB.instance().getCatalogContext().cluster.getUseddlschema(),
-                                                    m_adhocCompletionHandler, user);
+                m_siteId,
+                task.clientHandle, handler.connectionId(),
+                handler.isAdmin(), ccxn,
+                sql, stmtsArray, userParams, null, explainMode,
+                userPartitionKey == null, userPartitionKey,
+                task.procName, task.type, task.originalTxnId, task.originalUniqueId,
+                task.getBatchTimeout(),
+                VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
+                VoltDB.instance().getCatalogContext().cluster.getUseddlschema(),
+                m_adhocCompletionHandler, user);
         LocalObjectMessage work = new LocalObjectMessage( ahpw );
 
         m_mailbox.send(m_plannerSiteId, work);
@@ -1198,7 +1198,7 @@ public final class InvocationDispatcher {
 
                             ClientResponseImpl error = null;
                             if ((error = m_permissionValidator.shouldAccept(task.getProcName(), result.user, task,
-                                                                            SystemProcedureCatalog.listing.get(task.getProcName()).asCatalogProcedure())) != null) {
+                                    SystemProcedureCatalog.listing.get(task.procName).asCatalogProcedure())) != null) {
                                 writeResponseToConnection(error);
                             }
                             else {
@@ -1324,7 +1324,7 @@ public final class InvocationDispatcher {
     public static final StoredProcedureInvocation getUpdateCatalogExecutionTask(CatalogChangeResult changeResult) {
         // create the execution site task
            StoredProcedureInvocation task = new StoredProcedureInvocation();
-           task.setProcName("@UpdateApplicationCatalog");
+           task.procName = "@UpdateApplicationCatalog";
            task.setParams(changeResult.encodedDiffCommands,
                           changeResult.catalogHash,
                           changeResult.catalogBytes,
@@ -1404,13 +1404,12 @@ public final class InvocationDispatcher {
         boolean isSinglePartition = plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend;
         int partition = -1;
 
-        String procName = "";
         if (isSinglePartition) {
             if (plannedStmtBatch.isReadOnly()) {
-                procName += "@AdHoc_RO_SP";
+                task.procName = "@AdHoc_RO_SP";
             }
             else {
-                procName += "@AdHoc_RW_SP";
+                task.procName = "@AdHoc_RW_SP";
             }
             int type = VoltType.NULL.getValue();
             // replicated table read is single-part without a partitioning param
@@ -1431,14 +1430,13 @@ public final class InvocationDispatcher {
         }
         else {
             if (plannedStmtBatch.isReadOnly()) {
-                procName += "@AdHoc_RO_MP";
+                task.procName = "@AdHoc_RO_MP";
             }
             else {
-                procName += "@AdHoc_RW_MP";
+                task.procName = "@AdHoc_RW_MP";
             }
             task.setParams(buf.array());
         }
-        task.setProcName(procName);
         task.clientHandle = plannedStmtBatch.clientHandle;
 
         ClientResponseImpl error = null;
@@ -1456,7 +1454,7 @@ public final class InvocationDispatcher {
         }
         else
         if ((error = m_permissionValidator.shouldAccept(task.getProcName(), plannedStmtBatch.work.user, task,
-                                                        SystemProcedureCatalog.listing.get(task.getProcName()).asCatalogProcedure())) != null) {
+                SystemProcedureCatalog.listing.get(task.procName).asCatalogProcedure())) != null) {
             ByteBuffer buffer = ByteBuffer.allocate(error.getSerializedSize() + 4);
             buffer.putInt(buffer.capacity() - 4);
             error.flattenToBuffer(buffer).flip();
@@ -1464,7 +1462,7 @@ public final class InvocationDispatcher {
         }
         else
         if ((error = m_invocationValidator.shouldAccept(task.getProcName(), plannedStmtBatch.work.user, task,
-                                                        SystemProcedureCatalog.listing.get(task.getProcName()).asCatalogProcedure())) != null) {
+                SystemProcedureCatalog.listing.get(task.procName).asCatalogProcedure())) != null) {
             ByteBuffer buffer = ByteBuffer.allocate(error.getSerializedSize() + 4);
             buffer.putInt(buffer.capacity() - 4);
             error.flattenToBuffer(buffer).flip();
@@ -1627,7 +1625,7 @@ public final class InvocationDispatcher {
         if (ex != null) {
             exMsg = ex.getMessage();
         }
-        String errorMessage = "Error sending procedure " + task.getProcName()
+        String errorMessage = "Error sending procedure " + task.procName
                 + " to the correct partition. Make sure parameter values are correct."
                 + " Parameter value " + invocationParameter
                 + ", partition column " + catProc.getPartitioncolumn().getName()
