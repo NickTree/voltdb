@@ -112,7 +112,7 @@ public interface SiteProcedureConnection {
             long spHandle,
             long uniqueId,
             boolean readOnly,
-            String traceFilename) throws EEException;
+            boolean traceOn) throws EEException;
 
     /**
      * Let the EE know which batch of sql is running so it can include this

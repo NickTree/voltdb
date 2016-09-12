@@ -64,7 +64,6 @@ import org.voltdb.catalog.Statement;
 import org.voltdb.catalog.Table;
 import org.voltdb.client.BatchTimeoutOverrideType;
 import org.voltdb.client.ClientResponse;
-import org.voltdb.client.ProcedureInvocation;
 import org.voltdb.client.ProcedureInvocationType;
 import org.voltdb.common.Permission;
 import org.voltdb.compiler.AdHocPlannedStatement;
@@ -267,12 +266,10 @@ public final class InvocationDispatcher {
                 // Deserialize the client's request and map to a catalog stored procedure
         final CatalogContext catalogContext = m_catalogContext.get();
 
-        if (task.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.meta(task.getTraceName(), "process_name", "name", CoreUtils.getHostnameOrAddress()));
-            VoltTrace.add(() -> VoltTrace.meta(task.getTraceName(), "thread_name", "name", Thread.currentThread().getName()));
-            VoltTrace.add(() -> VoltTrace.meta(task.getTraceName(), "thread_sort_index", "sort_index", Integer.toString(1)));
-            VoltTrace.add(() -> VoltTrace.beginAsync(task.getTraceName(), "recvtxn", VoltTrace.Category.CI, task.getClientHandle()));
-        }
+        VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1)));
+        VoltTrace.add(() -> VoltTrace.beginAsync("recvtxn", VoltTrace.Category.CI, task.getClientHandle()));
 
         Procedure catProc = getProcedureFromName(task.getProcName(), catalogContext);
 
@@ -771,7 +768,7 @@ public final class InvocationDispatcher {
         int pid = (Integer) invocation.getParameterAtIndex(0);
         final long initiatorHSId = m_cartographer.getHSIdForSinglePartitionMaster(pid);
         long handle = cihm.getHandle(true, pid, invocation.getClientHandle(), invocation.getSerializedSize(),
-                nowNanos, invocation.getProcName(), null, initiatorHSId, true, false);
+                nowNanos, invocation.getProcName(), initiatorHSId, true, false);
 
         /*
          * Sentinels will be deduped by ReplaySequencer. They don't advance the
@@ -1109,11 +1106,9 @@ public final class InvocationDispatcher {
     private final void dispatchAdHocCommon(StoredProcedureInvocation task,
             InvocationClientHandler handler, Connection ccxn, ExplainMode explainMode,
             String sql, Object[] userParams, Object[] userPartitionKey, AuthSystem.AuthUser user) {
-        if (task.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.beginAsync(task.getTraceName(), "planadhoc", VoltTrace.Category.CI,
-                                                     task.getClientHandle(),
-                                                     "sql", sql));
-        }
+        VoltTrace.add(() -> VoltTrace.beginAsync("planadhoc", VoltTrace.Category.CI,
+                                                 task.getClientHandle(),
+                                                 "sql", sql));
 
         List<String> sqlStatements = SQLLexer.splitStatements(sql);
         String[] stmtsArray = sqlStatements.toArray(new String[sqlStatements.size()]);
@@ -1128,8 +1123,7 @@ public final class InvocationDispatcher {
                                                     task.getBatchTimeout(),
                                                     VoltDB.instance().getReplicationRole() == ReplicationRole.REPLICA,
                                                     VoltDB.instance().getCatalogContext().cluster.getUseddlschema(),
-                                                    m_adhocCompletionHandler, user,
-                                                    task.getTraceName());
+                                                    m_adhocCompletionHandler, user);
         LocalObjectMessage work = new LocalObjectMessage( ahpw );
 
         m_mailbox.send(m_plannerSiteId, work);
@@ -1155,11 +1149,8 @@ public final class InvocationDispatcher {
                         final AdHocPlannedStmtBatch plannedStmtBatch = (AdHocPlannedStmtBatch) result;
                         ExplainMode explainMode = plannedStmtBatch.getExplainMode();
 
-                        if (plannedStmtBatch.work.traceName != null) {
-                            VoltTrace.add(() -> VoltTrace.endAsync(plannedStmtBatch.work.traceName,
-                                                                   "planadhoc", VoltTrace.Category.CI,
-                                                                   plannedStmtBatch.clientHandle));
-                        }
+                        VoltTrace.add(() -> VoltTrace.endAsync("planadhoc", VoltTrace.Category.CI,
+                                                               plannedStmtBatch.clientHandle));
 
                         // assume all stmts have the same catalog version
                         if ((plannedStmtBatch.getPlannedStatementCount() > 0) &&
@@ -1413,14 +1404,7 @@ public final class InvocationDispatcher {
         boolean isSinglePartition = plannedStmtBatch.isSinglePartitionCompatible() || m_isConfiguredForNonVoltDBBackend;
         int partition = -1;
 
-        String procName;
-        if (plannedStmtBatch.work.traceName == null) {
-            procName = "";
-        } else {
-            procName = ProcedureInvocation.TRACE_NAME_DELIMITER +
-                       plannedStmtBatch.work.traceName +
-                       ProcedureInvocation.TRACE_NAME_DELIMITER;
-        }
+        String procName = "";
         if (isSinglePartition) {
             if (plannedStmtBatch.isReadOnly()) {
                 procName += "@AdHoc_RO_SP";
@@ -1593,7 +1577,7 @@ public final class InvocationDispatcher {
         }
 
         long handle = cihm.getHandle(isSinglePartition, partition, invocation.getClientHandle(),
-                messageSize, nowNanos, invocation.getProcName(), invocation.getTraceName(), initiatorHSId, isReadOnly, isShortCircuitRead);
+                messageSize, nowNanos, invocation.getProcName(), initiatorHSId, isReadOnly, isShortCircuitRead);
 
         Iv2InitiateTaskMessage workRequest =
             new Iv2InitiateTaskMessage(m_siteId,
@@ -1608,14 +1592,12 @@ public final class InvocationDispatcher {
                     connectionId,
                     isForReplay);
 
-        if (invocation.getTraceName() != null) {
-            Long finalInitiatorHSId = initiatorHSId;
-            VoltTrace.add(() -> VoltTrace.instantAsync(invocation.getTraceName(), "inittxn", VoltTrace.Category.CI,
-                                                       invocation.getClientHandle(),
-                                                       "ciHandle", Long.toString(handle),
-                                                       "partition", Integer.toString(partition),
-                                                       "dest", CoreUtils.hsIdToString(finalInitiatorHSId)));
-        }
+        Long finalInitiatorHSId = initiatorHSId;
+        VoltTrace.add(() -> VoltTrace.instantAsync("inittxn", VoltTrace.Category.CI,
+                                                   invocation.getClientHandle(),
+                                                   "ciHandle", Long.toString(handle),
+                                                   "partition", Integer.toString(partition),
+                                                   "dest", CoreUtils.hsIdToString(finalInitiatorHSId)));
 
         Iv2Trace.logCreateTransaction(workRequest);
         m_mailbox.send(initiatorHSId, workRequest);

@@ -136,8 +136,6 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
     private long m_logDuration = INITIAL_LOG_DURATION;
     private String[] m_sqlTexts = null;
 
-    private String m_traceFilename = null;
-
     /** information about EE calls back to JAVA. For test.*/
     public int m_callsFromEE = 0;
     public long m_lastTuplesAccessed = 0;
@@ -380,14 +378,12 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
 
     public void traceLog(boolean isBegin, String name, String args)
     {
-        if (m_traceFilename != null) {
-            if (isBegin) {
-                VoltTrace.add(() -> VoltTrace.beginDuration(m_traceFilename, name, VoltTrace.Category.EE,
-                                                            "partition", Integer.toString(m_partitionId),
-                                                            "info", args));
-            } else {
-                VoltTrace.add(() -> VoltTrace.endDuration(m_traceFilename));
-            }
+        if (isBegin) {
+            VoltTrace.add(() -> VoltTrace.beginDuration(name, VoltTrace.Category.EE,
+                                                        "partition", Integer.toString(m_partitionId),
+                                                        "info", args));
+        } else {
+            VoltTrace.add(VoltTrace::endDuration);
         }
     }
 
@@ -583,7 +579,7 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
                                             long lastCommittedSpHandle,
                                             long uniqueId,
                                             long undoQuantumToken,
-                                            String traceFilename) throws EEException
+                                            boolean traceOn) throws EEException
     {
         try {
             // For now, re-transform undoQuantumToken to readOnly. Redundancy work in site.executePlanFragments()
@@ -593,22 +589,15 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
             m_startTime = 0;
             m_logDuration = INITIAL_LOG_DURATION;
             m_sqlTexts = sqlTexts;
-            m_traceFilename = traceFilename;
 
-            if (m_traceFilename != null) {
-                final String finalFilename = m_traceFilename;
-                VoltTrace.add(() -> VoltTrace.beginDuration(finalFilename, "execplanfragment", VoltTrace.Category.SPSITE,
-                                        "txnId", TxnEgo.txnIdToString(txnId),
-                                        "partition", Integer.toString(m_partitionId)));
-            }
+            VoltTrace.add(() -> VoltTrace.beginDuration("execplanfragment", VoltTrace.Category.SPSITE,
+                                                        "txnId", TxnEgo.txnIdToString(txnId),
+                                                        "partition", Integer.toString(m_partitionId)));
 
             VoltTable[] results = coreExecutePlanFragments(numFragmentIds, planFragmentIds, inputDepIds,
-                    parameterSets, txnId, spHandle, lastCommittedSpHandle, uniqueId, undoQuantumToken, m_traceFilename != null);
+                    parameterSets, txnId, spHandle, lastCommittedSpHandle, uniqueId, undoQuantumToken, traceOn);
 
-            if (m_traceFilename != null) {
-                final String finalFilename = m_traceFilename;
-                VoltTrace.add(() -> VoltTrace.endDuration(finalFilename));
-            }
+            VoltTrace.add(VoltTrace::endDuration);
 
             m_plannerStats.updateEECacheStats(m_eeCacheSize, numFragmentIds - m_cacheMisses,
                     m_cacheMisses, m_partitionId);
@@ -621,7 +610,6 @@ public abstract class ExecutionEngine implements FastDeserializer.Deserializatio
             m_cacheMisses = 0;
 
             m_sqlTexts = null;
-            m_traceFilename = null;
         }
     }
 

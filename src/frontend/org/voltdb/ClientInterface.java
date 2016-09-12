@@ -925,12 +925,10 @@ public class ClientInterface implements SnapshotDaemon.DaemonInitiator {
                     delta,
                     clientResponse.getStatus());
 
-            if (clientData.m_traceName != null) {
-                VoltTrace.add(() -> VoltTrace.endAsync(clientData.m_traceName, "recvtxn", VoltTrace.Category.CI,
-                                                       clientData.m_clientHandle,
-                                                       "status", Byte.toString(clientResponse.getStatus()),
-                                                       "statusString", clientResponse.getStatusString()));
-            }
+            VoltTrace.add(() -> VoltTrace.endAsync("recvtxn", VoltTrace.Category.CI,
+                                                   clientData.m_clientHandle,
+                                                   "status", Byte.toString(clientResponse.getStatus()),
+                                                   "statusString", clientResponse.getStatusString()));
 
             clientResponse.setClientHandle(clientData.m_clientHandle);
             clientResponse.setClusterRoundtrip((int)TimeUnit.NANOSECONDS.toMillis(delta));
@@ -1370,8 +1368,8 @@ public class ClientInterface implements SnapshotDaemon.DaemonInitiator {
 
         final ClientResponseImpl errResp = m_dispatcher.dispatch(task, handler, ccxn, user);
 
-        if (task.getTraceName() != null && errResp != null) {
-            VoltTrace.add(() -> VoltTrace.endAsync(task.getTraceName(), "recvtxn", VoltTrace.Category.CI,
+        if (errResp != null) {
+            VoltTrace.add(() -> VoltTrace.endAsync("recvtxn", VoltTrace.Category.CI,
                                                    task.getClientHandle(),
                                                    "status", Byte.toString(errResp.getStatus()),
                                                    "statusString", errResp.getStatusString()));

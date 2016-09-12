@@ -53,12 +53,9 @@ public class CompleteTransactionTask extends TransactionTask
     public void run(SiteProcedureConnection siteConnection)
     {
         hostLog.debug("STARTING: " + this);
-        final FragmentTaskMessage frag = (FragmentTaskMessage) m_txnState.getNotice();
-        if (frag.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.beginDuration(frag.getTraceName(), "execcompletetxn", VoltTrace.Category.SPSITE,
-                                    "txnId", TxnEgo.txnIdToString(getTxnId()),
-                                    "partition", Integer.toString(siteConnection.getCorrespondingPartitionId())));
-        }
+        VoltTrace.add(() -> VoltTrace.beginDuration("execcompletetxn", VoltTrace.Category.SPSITE,
+                                                    "txnId", TxnEgo.txnIdToString(getTxnId()),
+                                                    "partition", Integer.toString(siteConnection.getCorrespondingPartitionId())));
 
         if (!m_txnState.isReadOnly()) {
             // the truncation point token SHOULD be part of m_txn. However, the
@@ -87,9 +84,7 @@ public class CompleteTransactionTask extends TransactionTask
             hostLog.debug("RESTART: " + this);
         }
 
-        if (frag.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.endDuration(frag.getTraceName()));
-        }
+        VoltTrace.add(VoltTrace::endDuration);
 
         final CompleteTransactionResponseMessage resp = new CompleteTransactionResponseMessage(m_completeMsg);
         resp.m_sourceHSId = m_initiator.getHSId();

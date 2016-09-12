@@ -23,13 +23,11 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
-import java.util.regex.Matcher;
 
 import org.json_voltpatches.JSONString;
 import org.json_voltpatches.JSONStringer;
 import org.voltcore.logging.VoltLogger;
 import org.voltdb.client.BatchTimeoutOverrideType;
-import org.voltdb.client.ProcedureInvocation;
 import org.voltdb.client.ProcedureInvocationType;
 import org.voltdb.common.Constants;
 import org.voltdb.messaging.FastDeserializer;
@@ -45,11 +43,7 @@ public class StoredProcedureInvocation implements JSONString {
     public static final int CURRENT_MOST_RECENT_VERSION = 1;
 
     ProcedureInvocationType type = ProcedureInvocationType.ORIGINAL;
-    private String fullProcName = null;
-
-    // Transient state
-    private String traceName = null;
-    private String procName = null;
+    String procName = null;
 
     public static final long UNITIALIZED_ID = -1L;
     /*
@@ -81,8 +75,6 @@ public class StoredProcedureInvocation implements JSONString {
         copy.clientHandle = clientHandle;
         copy.params = params;
         copy.procName = procName;
-        copy.traceName = traceName;
-        copy.fullProcName = fullProcName;
         copy.originalTxnId = originalTxnId;
         copy.originalUniqueId = originalUniqueId;
         if (serializedParams != null)
@@ -112,8 +104,7 @@ public class StoredProcedureInvocation implements JSONString {
     }
 
     public void setProcName(String name) {
-        fullProcName = name;
-        parseName();
+        procName = name;
     }
 
     public void setOriginalTxnId(long txnId) {
@@ -144,20 +135,6 @@ public class StoredProcedureInvocation implements JSONString {
 
     public String getProcName() {
         return procName;
-    }
-
-    public String getTraceName() {
-        return traceName;
-    }
-
-    public String getFullProcName() {
-        return fullProcName;
-    }
-
-    private void parseName()
-    {
-        traceName = ProcedureInvocation.extractTraceName(fullProcName);
-        procName = ProcedureInvocation.extractProcName(fullProcName);
     }
 
     public long getOriginalTxnId() {
@@ -217,7 +194,7 @@ public class StoredProcedureInvocation implements JSONString {
         int size = 1 // Version/type
             + timeoutSize // batch time out byte
             + 4 // proc name string length
-            + fullProcName.length()
+            + procName.length()
             + 8; // clientHandle
 
         if (ProcedureInvocationType.isDeprecatedInternalDRType(type))
@@ -263,8 +240,8 @@ public class StoredProcedureInvocation implements JSONString {
                 buf.putInt(batchTimeout);
             }
         }
-        buf.putInt(fullProcName.length());
-        buf.put(fullProcName.getBytes(Constants.UTF8ENCODING));
+        buf.putInt(procName.length());
+        buf.put(procName.getBytes(Constants.UTF8ENCODING));
         buf.putLong(clientHandle);
         if (serializedParams != null)
         {
@@ -291,7 +268,7 @@ public class StoredProcedureInvocation implements JSONString {
                 getParams().flattenToBuffer(buf);
             }
             catch (BufferOverflowException e) {
-                hostLog.info("SP \"" + fullProcName + "\" has thrown BufferOverflowException");
+                hostLog.info("SP \"" + procName + "\" has thrown BufferOverflowException");
                 hostLog.info(toString());
                 throw e;
             }
@@ -329,9 +306,7 @@ public class StoredProcedureInvocation implements JSONString {
             }
         }
 
-        fullProcName = in.readString().intern();
-        parseName();
-
+        procName = in.readString().intern();
         clientHandle = in.readLong();
         // do not deserialize parameters in ClientInterface context
         serializedParams = in.remainder();
@@ -346,7 +321,7 @@ public class StoredProcedureInvocation implements JSONString {
 
     @Override
     public String toString() {
-        String retval = type.name() + " Invocation: " + getProcName() + "(";
+        String retval = type.name() + " Invocation: " + procName + "(";
         ParameterSet params = getParams();
         if (params != null)
             for (Object o : params.toArray()) {
@@ -365,7 +340,7 @@ public class StoredProcedureInvocation implements JSONString {
     }
 
     public void getDumpContents(StringBuilder sb) {
-        sb.append(type.name()).append("Invocation: ").append(getProcName()).append("(");
+        sb.append(type.name()).append("Invocation: ").append(procName).append("(");
         ParameterSet params = getParams();
         if (params != null)
             for (Object o : params.toArray()) {
@@ -404,8 +379,8 @@ public class StoredProcedureInvocation implements JSONString {
         try {
             js.object();
             js.key("proc_name");
-            js.value(getProcName());
-            if (!getProcName().startsWith("@ApplyBinaryLog")) {
+            js.value(procName);
+            if (!procName.startsWith("@ApplyBinaryLog")) {
                 js.key("parameters");
                 js.value(params.get());
             }

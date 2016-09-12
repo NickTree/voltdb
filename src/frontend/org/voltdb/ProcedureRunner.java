@@ -1514,7 +1514,7 @@ public class ProcedureRunner {
                                          m_txnState,
                                          m_site.getCorrespondingSiteId(),
                                          finalTask,
-                                         m_txnState.getInvocation().getFullProcName(),
+                                         m_txnState.getInvocation().getProcName(),
                                          m_procNameToLoadForFragmentTasks);
 
        // iterate over all sql in the batch, filling out the above data structures
@@ -1632,7 +1632,7 @@ public class ProcedureRunner {
                    m_txnState.m_spHandle,
                    m_txnState.uniqueId,
                    m_isReadOnly,
-                   m_txnState.getInvocation().getTraceName());
+                   true);
        } catch (Throwable ex) {
            if (! m_isReadOnly) {
                // roll back the current batch and re-throw the EE exception

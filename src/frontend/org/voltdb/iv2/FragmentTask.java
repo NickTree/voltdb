@@ -77,12 +77,9 @@ public class FragmentTask extends TransactionTask
 
     @Override
     protected void durabilityTraceEnd() {
-        if (m_fragmentMsg.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.endAsync(m_fragmentMsg.getTraceName(),
-                               "durability",
-                               VoltTrace.Category.SPI,
-                               MiscUtils.hsIdTxnIdToString(m_initiator.getHSId(), m_fragmentMsg.getSpHandle())));
-        }
+        VoltTrace.add(() -> VoltTrace.endAsync("durability",
+                                               VoltTrace.Category.SPI,
+                                               MiscUtils.hsIdTxnIdToString(m_initiator.getHSId(), m_fragmentMsg.getSpHandle())));
     }
 
     @Override
@@ -92,11 +89,9 @@ public class FragmentTask extends TransactionTask
         if (hostLog.isDebugEnabled()) {
             hostLog.debug("STARTING: " + this);
         }
-        if (m_fragmentMsg.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.beginDuration(m_fragmentMsg.getTraceName(), "runfragmenttask", VoltTrace.Category.SPSITE,
-                                    "txnId", TxnEgo.txnIdToString(getTxnId()),
-                                    "partition", Integer.toString(siteConnection.getCorrespondingPartitionId())));
-        }
+        VoltTrace.add(() -> VoltTrace.beginDuration("runfragmenttask", VoltTrace.Category.SPSITE,
+                                                    "txnId", TxnEgo.txnIdToString(getTxnId()),
+                                                    "partition", Integer.toString(siteConnection.getCorrespondingPartitionId())));
 
         // if this has a procedure name from the initiation bundled,
         // inform the site connection here
@@ -137,9 +132,7 @@ public class FragmentTask extends TransactionTask
         if (hostLog.isDebugEnabled()) {
             hostLog.debug("COMPLETE: " + this);
         }
-        if (m_fragmentMsg.getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.endDuration(m_fragmentMsg.getTraceName()));
-        }
+        VoltTrace.add(VoltTrace::endDuration);
     }
 
     @Override
@@ -292,7 +285,7 @@ public class FragmentTask extends TransactionTask
                         m_txnState.m_spHandle,
                         m_txnState.uniqueId,
                         m_txnState.isReadOnly(),
-                        m_fragmentMsg.getTraceName())[0];
+                        true)[0];
 
                 if (hostLog.isTraceEnabled()) {
                     hostLog.l7dlog(Level.TRACE,

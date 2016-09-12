@@ -537,15 +537,15 @@ public class TestSQLParser extends TestCase {
     {
         ExecuteCallResults results = SQLParser.parseExecuteCallWithoutParameterTypes(query);
         assertNotNull(results);
-        assertNotNull(results.getProcedure());
-        assertFalse(results.getProcedure().isEmpty());
+        assertNotNull(results.procedure);
+        assertFalse(results.procedure.isEmpty());
         String msg = "\nTest ID: " + testID + ". ";
 
         String expected = query.replace("exec", "");
         expected = expected.replaceAll(separatorPattern, "/");
         expected += "/ Total:" + numExpected;
 
-        String parsedString = "/" + results.getProcedure() + "/" +
+        String parsedString = "/" + results.procedure + "/" +
                 Joiner.on("/").join(results.params);
         parsedString += "/ Total:" + (results.params.size() + 1);
 

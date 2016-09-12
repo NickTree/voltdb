@@ -29,34 +29,8 @@ import org.voltdb.utils.SerializationHelper;
  */
 public class ProcedureInvocation {
 
-    public static final char TRACE_NAME_DELIMITER = '#';
-    public static String extractProcName(String s) {
-        if (s.charAt(0) != TRACE_NAME_DELIMITER) {
-            return s;
-        }
-
-        final int endPos = s.indexOf(TRACE_NAME_DELIMITER, 1);
-        if (endPos != -1 && s.getBytes().length > endPos + 1) {
-            return s.substring(endPos + 1);
-        } else {
-            return s;
-        }
-    }
-    public static String extractTraceName(String s) {
-        if (s.charAt(0) != TRACE_NAME_DELIMITER) {
-            return null;
-        }
-
-        final int endPos = s.indexOf(TRACE_NAME_DELIMITER, 1);
-        if (endPos != -1) {
-            return s.substring(1, endPos);
-        } else {
-            return s;
-        }
-    }
-
     private final long m_clientHandle;
-    private final String m_fullProcName;
+    private final String m_procName;
     private byte m_procNameBytes[];
     private final ParameterSet m_parameters;
 
@@ -66,9 +40,6 @@ public class ProcedureInvocation {
     private final ProcedureInvocationType m_type;
 
     private int m_batchTimeout;
-
-    // transient state
-    private String m_procName = null;
 
     public ProcedureInvocation(long handle, String procName, Object... parameters) {
         this(-1, -1, handle, procName, parameters);
@@ -89,7 +60,7 @@ public class ProcedureInvocation {
         m_originalTxnId = originalTxnId;
         m_originalUniqueId = originalUniqueId;
         m_clientHandle = handle;
-        m_fullProcName = procName;
+        m_procName = procName;
         m_parameters = (parameters != null
                             ? ParameterSet.fromArrayWithCopy(parameters)
                             : ParameterSet.emptyParameterSet());
@@ -114,17 +85,12 @@ public class ProcedureInvocation {
     }
 
     public String getProcName() {
-        if (m_procName != null) {
-            return m_procName;
-        } else {
-            m_procName = extractProcName(m_fullProcName);
-            return m_procName;
-        }
+        return m_procName;
     }
 
     public int getSerializedSize() {
         try {
-            m_procNameBytes = m_fullProcName.getBytes("UTF-8");
+            m_procNameBytes = m_procName.getBytes("UTF-8");
         } catch (Exception e) {/*No UTF-8? Really?*/}
 
         int timeoutSize = 0;

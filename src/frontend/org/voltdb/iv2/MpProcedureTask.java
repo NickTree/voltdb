@@ -103,15 +103,10 @@ public class MpProcedureTask extends ProcedureTask
     @Override
     public void run(SiteProcedureConnection siteConnection)
     {
-        if (m_msg.getStoredProcedureInvocation().getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.meta(m_msg.getStoredProcedureInvocation().getTraceName(),
-                                               "thread_name", "name", Thread.currentThread().getName()));
-            VoltTrace.add(() -> VoltTrace.meta(m_msg.getStoredProcedureInvocation().getTraceName(),
-                                               "thread_sort_index", "sort_index", Integer.toString(1000)));
-            VoltTrace.add(() -> VoltTrace.beginDuration(m_msg.getStoredProcedureInvocation().getTraceName(),
-                                                        "mpinittask", VoltTrace.Category.MPSITE,
-                                                        "txnId", TxnEgo.txnIdToString(getTxnId())));
-        }
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1000)));
+        VoltTrace.add(() -> VoltTrace.beginDuration("mpinittask", VoltTrace.Category.MPSITE,
+                                                    "txnId", TxnEgo.txnIdToString(getTxnId())));
 
         hostLog.debug("STARTING: " + this);
         // Cast up. Could avoid ugliness with Iv2TransactionClass baseclass
@@ -192,9 +187,7 @@ public class MpProcedureTask extends ProcedureTask
             hostLog.debug("RESTART: " + this);
         }
 
-        if (m_msg.getStoredProcedureInvocation().getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.endDuration(m_msg.getStoredProcedureInvocation().getTraceName()));
-        }
+        VoltTrace.add(VoltTrace::endDuration);
     }
 
     @Override
@@ -213,13 +206,11 @@ public class MpProcedureTask extends ProcedureTask
     @Override
     void completeInitiateTask(SiteProcedureConnection siteConnection)
     {
-        if (m_msg.getStoredProcedureInvocation().getTraceName() != null) {
-            VoltTrace.add(() -> VoltTrace.instant(m_msg.getStoredProcedureInvocation().getTraceName(), "sendcomplete",
-                                                  VoltTrace.Category.MPSITE,
-                                                  "txnId", TxnEgo.txnIdToString(getTxnId()),
-                                                  "commit", Boolean.toString(!m_txnState.needsRollback()),
-                                                  "dest", CoreUtils.hsIdCollectionToString(m_initiatorHSIds)));
-        }
+        VoltTrace.add(() -> VoltTrace.instant("sendcomplete",
+                                              VoltTrace.Category.MPSITE,
+                                              "txnId", TxnEgo.txnIdToString(getTxnId()),
+                                              "commit", Boolean.toString(!m_txnState.needsRollback()),
+                                              "dest", CoreUtils.hsIdCollectionToString(m_initiatorHSIds)));
 
         CompleteTransactionMessage complete = new CompleteTransactionMessage(
                 m_initiator.getHSId(), // who is the "initiator" now??
