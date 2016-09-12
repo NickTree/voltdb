@@ -20,10 +20,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.locks.LockSupport;
 
 import org.codehaus.jackson.map.ObjectMapper;
@@ -49,8 +45,8 @@ public class TraceFileWriter implements Runnable {
     private final String m_traceFilesDir;
     private final VoltTrace m_voltTrace;
     private boolean m_shutdown;
-    private Map<String, BufferedWriter> m_fileWriters = new LinkedHashMap<>(16, 0.75F, true);
-    private Map<String, FileTimeInfo> m_fileTimeInfo = new HashMap<>();
+    private BufferedWriter m_fileWriter = null;
+    private FileTimeInfo m_fileTimeInfo = null;
 
     public TraceFileWriter(VoltTrace voltTrace) {
         m_voltTrace = voltTrace;
@@ -71,27 +67,22 @@ public class TraceFileWriter implements Runnable {
                     continue;
                 }
 
-                boolean firstRow = false;
                 if (event.getType()==VoltTrace.TraceEventType.VOLT_INTERNAL_CLOSE) {
-                    handleCloseEvent(event.getFileName());
+                    handleCloseEvent();
                 } else if (event.getType()== VoltTrace.TraceEventType.VOLT_INTERNAL_CLOSE_ALL) {
-                    handleCloseAllEvent();
+                    handleCloseEvent();
                     m_shutdown = true;
                 } else {
-                    if (m_fileWriters.get(event.getFileName()) == null) {
-                        firstRow = true;
-                    }
                     startTraceFile(event);
                 }
-                BufferedWriter bw = m_fileWriters.get(event.getFileName());
-                if (bw != null) {
-                    m_fileTimeInfo.get(event.getFileName()).updateAccessMillis();
-                    event.setSyncNanos(m_fileTimeInfo.get(event.getFileName()).m_syncNanos);
+                if (m_fileWriter != null) {
+                    m_fileTimeInfo.updateAccessMillis();
+                    event.setSyncNanos(m_fileTimeInfo.m_syncNanos);
                     String json = m_jsonMapper.writeValueAsString(event);
-                    if (!firstRow) bw.write(",");
-                    bw.newLine();
-                    bw.write(json);
-                    bw.flush();
+                    m_fileWriter.write(",");
+                    m_fileWriter.newLine();
+                    m_fileWriter.write(json);
+                    m_fileWriter.flush();
                 }
             } catch(InterruptedException e) {
                 s_logger.info("Volt trace file writer thread interrupted. Stopping trace file writer.");
@@ -103,14 +94,8 @@ public class TraceFileWriter implements Runnable {
         }
     }
 
-    private void handleCloseAllEvent() {
-        for (String file : m_fileWriters.keySet().toArray(new String[0])) {
-            handleCloseEvent(file);
-        }
-    }
-
-    private void handleCloseEvent(String fileName) {
-        BufferedWriter bw = m_fileWriters.get(fileName);
+    private void handleCloseEvent() {
+        BufferedWriter bw = m_fileWriter;
         if (bw==null) return;
 
         try {
@@ -124,42 +109,26 @@ public class TraceFileWriter implements Runnable {
                 s_logger.debug("Exception closing trace file buffered writer", e);
             }
         }
-        m_fileWriters.remove(fileName);
-        m_fileTimeInfo.remove(fileName);
+        m_fileWriter = null;
+        m_fileTimeInfo = null;
     }
 
     private void startTraceFile(VoltTrace.TraceEvent event) throws IOException {
-        BufferedWriter bw = m_fileWriters.get(event.getFileName());
+        BufferedWriter bw = m_fileWriter;
         if (bw != null) return;
 
-        File file = new File(event.getFileName());
+        File file = new File("volt.trace");
         // if the file exists already, we don't want to overwrite
         if (file.exists()) {
             s_logger.rateLimitedLog(60, Level.WARN, null,
-                "Trace file %s already exists. Dropping trace events to avoid overwriting the file",
-                event.getFileName());
+                "Trace file already exists. Dropping trace events to avoid overwriting the file");
             return;
         }
 
-        if (m_fileWriters.size() == MAX_OPEN_TRACES) {
-            // Check if the earliest accessed file can be removed
-            Entry<String, BufferedWriter> entry = m_fileWriters.entrySet().iterator().next();
-            String key = entry.getKey();
-            if ((System.currentTimeMillis() - m_fileTimeInfo.get(key).m_accessMillis)
-                    > PURGE_MILLIS_DELAY) {
-                handleCloseEvent(key);
-            } else { // no entries to remove. Don't allow this trace
-                s_logger.rateLimitedLog(60, Level.WARN, null,
-                        "Number of trace files have reached the max of %d. Dropping %c trace event for file %s",
-                        MAX_OPEN_TRACES, event.getTypeChar(), event.getFileName());
-                return;
-            }
-        }
-
         // Uses the default platform encoding for now.
-        bw = new BufferedWriter(new FileWriter(new File(m_traceFilesDir, event.getFileName())));
-        m_fileWriters.put(event.getFileName(), bw);
-        m_fileTimeInfo.put(event.getFileName(), new FileTimeInfo(event.getNanos()));
+        bw = new BufferedWriter(new FileWriter(new File(m_traceFilesDir, "volt.trace")));
+        m_fileWriter = bw;
+        m_fileTimeInfo = new FileTimeInfo(event.getNanos());
         bw.write("[");
         bw.flush();
     }

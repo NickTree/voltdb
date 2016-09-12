@@ -104,7 +104,6 @@ public class VoltTrace {
      */
     @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
     public static class TraceEvent {
-        private String m_fileName;
         private TraceEventType m_type;
         private String m_name;
         private Category m_category;
@@ -119,13 +118,11 @@ public class VoltTrace {
         public TraceEvent() {
         }
 
-        public TraceEvent(String fileName,
-                TraceEventType type,
+        public TraceEvent(TraceEventType type,
                 String name,
                 Category category,
                 String asyncId,
                 String... args) {
-            m_fileName = fileName;
             m_type = type;
             m_name = name;
             m_category = category;
@@ -156,15 +153,6 @@ public class VoltTrace {
          */
         public void setSyncNanos(long syncNanos) {
             m_ts = (m_nanos - syncNanos)/1000.0;
-        }
-
-        @JsonIgnore
-        public String getFileName() {
-            return m_fileName;
-        }
-
-        public void setFileName(String fileName) {
-            m_fileName = fileName;
         }
 
         @JsonIgnore
@@ -312,57 +300,57 @@ public class VoltTrace {
     /**
      * Logs a metadata trace event.
      */
-    public static TraceEvent meta(String fileName, String name, String... args) {
-        return new TraceEvent(fileName, TraceEventType.METADATA, name, null, null, args);
+    public static TraceEvent meta(String name, String... args) {
+        return new TraceEvent(TraceEventType.METADATA, name, null, null, args);
     }
 
     /**
      * Logs an instant trace event.
      */
-    public static TraceEvent instant(String fileName, String name, Category category, String... args) {
-        return new TraceEvent(fileName, TraceEventType.INSTANT, name, category, null, args);
+    public static TraceEvent instant(String name, Category category, String... args) {
+        return new TraceEvent(TraceEventType.INSTANT, name, category, null, args);
     }
 
     /**
      * Logs a begin duration trace event.
      */
-    public static TraceEvent beginDuration(String fileName, String name, Category category, String... args) {
-        return new TraceEvent(fileName, TraceEventType.DURATION_BEGIN, name, category, null, args);
+    public static TraceEvent beginDuration(String name, Category category, String... args) {
+        return new TraceEvent(TraceEventType.DURATION_BEGIN, name, category, null, args);
     }
 
     /**
      * Logs an end duration trace event.
      */
-    public static TraceEvent endDuration(String fileName) {
-        return new TraceEvent(fileName, TraceEventType.DURATION_END, null, null, null);
+    public static TraceEvent endDuration() {
+        return new TraceEvent(TraceEventType.DURATION_END, null, null, null);
     }
 
     /**
      * Logs a begin async trace event.
      */
-    public static TraceEvent beginAsync(String fileName, String name, Category category, Object id, String... args) {
-        return new TraceEvent(fileName, TraceEventType.ASYNC_BEGIN, name, category, String.valueOf(id), args);
+    public static TraceEvent beginAsync(String name, Category category, Object id, String... args) {
+        return new TraceEvent(TraceEventType.ASYNC_BEGIN, name, category, String.valueOf(id), args);
     }
 
     /**
      * Logs an end async trace event.
      */
-    public static TraceEvent endAsync(String fileName, String name, Category category, Object id, String... args) {
-        return new TraceEvent(fileName, TraceEventType.ASYNC_END, name, category, String.valueOf(id), args);
+    public static TraceEvent endAsync(String name, Category category, Object id, String... args) {
+        return new TraceEvent(TraceEventType.ASYNC_END, name, category, String.valueOf(id), args);
     }
 
     /**
      * Logs an async instant trace event.
      */
-    public static TraceEvent instantAsync(String fileName, String name, Category category, Object id, String... args) {
-        return new TraceEvent(fileName, TraceEventType.ASYNC_INSTANT, name, category, String.valueOf(id), args);
+    public static TraceEvent instantAsync(String name, Category category, Object id, String... args) {
+        return new TraceEvent(TraceEventType.ASYNC_INSTANT, name, category, String.valueOf(id), args);
     }
 
     /**
      * Closes the given file. Further trace events to this file will be ignored.
      */
-    public static void close(String fileName) {
-        s_tracer.queueEvent(() -> new TraceEvent(fileName, TraceEventType.VOLT_INTERNAL_CLOSE, null, null, null));
+    public static void close() {
+        s_tracer.queueEvent(() -> new TraceEvent(TraceEventType.VOLT_INTERNAL_CLOSE, null, null, null));
     }
 
     /**
@@ -372,7 +360,7 @@ public class VoltTrace {
      *                         number of milliseconds.
      */
     public static void closeAllAndShutdown(long timeOutMillis) {
-        s_tracer.queueEvent(() -> new TraceEvent(null, TraceEventType.VOLT_INTERNAL_CLOSE_ALL, null, null, null));
+        s_tracer.queueEvent(() -> new TraceEvent(TraceEventType.VOLT_INTERNAL_CLOSE_ALL, null, null, null));
         if (timeOutMillis >= 0) {
             try { s_tracer.m_writerThread.join(timeOutMillis); } catch (InterruptedException e) {}
         }
