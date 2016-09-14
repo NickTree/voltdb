@@ -266,8 +266,9 @@ public final class InvocationDispatcher {
                 // Deserialize the client's request and map to a catalog stored procedure
         final CatalogContext catalogContext = m_catalogContext.get();
 
+        final String threadName = Thread.currentThread().getName(); // Thread name has to be materialized here
         VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
-        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1)));
         VoltTrace.add(() -> VoltTrace.beginAsync("recvtxn", VoltTrace.Category.CI, task.getClientHandle()));
 

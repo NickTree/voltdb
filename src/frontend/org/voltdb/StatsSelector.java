@@ -52,6 +52,7 @@ public enum StatsSelector {
     REBALANCE,      // return elastic rebalance progress
     KSAFETY,        // return ksafety coverage information
     CPU,            // Return CPU Stats
+    TRACE,          // Dump tracing info
 
     COMMANDLOG,     // return number of outstanding bytes and txns on this node
     IMPORTER

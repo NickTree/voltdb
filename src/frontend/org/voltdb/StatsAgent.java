@@ -379,6 +379,9 @@ public class StatsAgent extends OpsAgent
         case CPU:
             stats = collectStats(StatsSelector.CPU, interval);
             break;
+        case TRACE:
+            stats = collectStats(StatsSelector.TRACE, false);
+            break;
         case IOSTATS:
             stats = collectStats(StatsSelector.IOSTATS, interval);
             break;

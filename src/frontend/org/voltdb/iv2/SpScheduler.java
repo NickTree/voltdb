@@ -582,10 +582,12 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
      */
     private void doLocalInitiateOffer(Iv2InitiateTaskMessage msg)
     {
+        final String threadName = Thread.currentThread().getName(); // Thread name has to be materialized here
         VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
-        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(10000)));
         VoltTrace.add(() -> VoltTrace.beginAsync("initsp", VoltTrace.Category.SPI,
+                                                 MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), m_mailbox.getHSId(), msg.getSpHandle()),
                                                  "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                                  "partition", Integer.toString(m_partitionId),
                                                  "hsId", CoreUtils.hsIdToString(m_mailbox.getHSId())));
@@ -728,12 +730,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         final long spHandle = message.getSpHandle();
         final DuplicateCounterKey dcKey = new DuplicateCounterKey(message.getTxnId(), spHandle);
         DuplicateCounter counter = m_duplicateCounters.get(dcKey);
-        final String traceId;
-        if (counter != null) {
-            traceId = MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), message.m_sourceHSId, message.getSpHandle());
-        } else {
-            traceId = null;
-        }
+        final String traceId = MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), message.m_sourceHSId, message.getSpHandle());
 
         // All reads will have no duplicate counter.
         // Avoid all the lookup below.
@@ -776,7 +773,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             }
         }
         else {
-            VoltTrace.add(() -> VoltTrace.endAsync("initsp", VoltTrace.Category.SPI, null));
+            VoltTrace.add(() -> VoltTrace.endAsync("initsp", VoltTrace.Category.SPI, traceId));
             // the initiatorHSId is the ClientInterface mailbox.
             // this will be on SPI without k-safety or replica only with k-safety
             assert(!message.isReadOnly());
@@ -925,8 +922,9 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
      */
     private void doLocalFragmentOffer(FragmentTaskMessage msg)
     {
+        final String threadName = Thread.currentThread().getName(); // Thread name has to be materialized here
         VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
-        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(10000)));
         VoltTrace.add(() -> VoltTrace.beginAsync("recvfragment", VoltTrace.Category.SPI,
                                                  MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), m_mailbox.getHSId(), msg.getSpHandle()),

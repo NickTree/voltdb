@@ -255,8 +255,9 @@ public class MpScheduler extends Scheduler
         TxnEgo ego = advanceTxnEgo();
         mpTxnId = ego.getTxnId();
 
+        final String threadName = Thread.currentThread().getName(); // Thread name has to be materialized here
         VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
-        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(100)));
         VoltTrace.add(() -> VoltTrace.beginAsync("initmp", VoltTrace.Category.MPI, mpTxnId,
                                                  "txnId", TxnEgo.txnIdToString(mpTxnId)));

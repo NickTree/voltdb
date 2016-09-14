@@ -79,6 +79,10 @@ public class SpProcedureTask extends ProcedureTask
         if (HOST_DEBUG_ENABLED) {
             hostLog.debug("STARTING: " + this);
         }
+        VoltTrace.add(() -> VoltTrace.beginDuration("runsptask", VoltTrace.Category.SPSITE,
+                                                    "txnId", TxnEgo.txnIdToString(getTxnId()),
+                                                    "partition", Integer.toString(siteConnection.getCorrespondingPartitionId())));
+
         if (!m_txnState.isReadOnly()) {
             m_txnState.setBeginUndoToken(siteConnection.getLatestUndoToken());
         }
@@ -114,6 +118,7 @@ public class SpProcedureTask extends ProcedureTask
         if (HOST_DEBUG_ENABLED) {
             hostLog.debug("COMPLETE: " + this);
         }
+        VoltTrace.add(VoltTrace::endDuration);
 
         logToDR(txnState, response);
     }

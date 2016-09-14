@@ -103,7 +103,8 @@ public class MpProcedureTask extends ProcedureTask
     @Override
     public void run(SiteProcedureConnection siteConnection)
     {
-        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", Thread.currentThread().getName()));
+        final String threadName = Thread.currentThread().getName(); // Thread name has to be materialized here
+        VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1000)));
         VoltTrace.add(() -> VoltTrace.beginDuration("mpinittask", VoltTrace.Category.MPSITE,
                                                     "txnId", TxnEgo.txnIdToString(getTxnId())));
