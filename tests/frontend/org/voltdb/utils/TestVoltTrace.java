@@ -25,8 +25,10 @@ package org.voltdb.utils;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -35,11 +37,15 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.zip.GZIPInputStream;
 
 import org.codehaus.jackson.map.ObjectMapper;
 
 import junit.framework.TestCase;
+import org.voltdb.StatsAgent;
 
+import static org.mockito.Mockito.mock;
 import static org.voltdb.utils.VoltTrace.Category.CI;
 
 public class TestVoltTrace extends TestCase {
@@ -51,7 +57,7 @@ public class TestVoltTrace extends TestCase {
     @Override
     public void setUp() throws Exception {
         System.setProperty("VOLT_JUSTATEST", "YESYESYES");
-        VoltTrace.startTracer();
+        VoltTrace.startTracer(".", mock(StatsAgent.class));
         cleanupTraceFiles();
     }
 
@@ -84,20 +90,14 @@ public class TestVoltTrace extends TestCase {
         }
         es.shutdown();
         es.awaitTermination(60, TimeUnit.SECONDS);
-        for (int i=0; i<fileCount; i++) {
-            VoltTrace.close();
-        }
 
-        VoltTrace.closeAllAndShutdown(0);
+        final String path = VoltTrace.closeAllAndShutdown(true, 0);
 
-        for (int i=0; i<fileCount; i++) {
-            verifyFileContents(senders[i].getSentList(), FILE_NAME_PREFIX+i);
-        }
+        verifyFileContents(Arrays.stream(senders).map(SenderRunnable::getSentList).flatMap(List::stream).collect(Collectors.toList()), path);
     }
 
     public void testTraceLimit() throws Exception {
-        TraceFileWriter.PURGE_MILLIS_DELAY = 30000;
-        int maxFiles = TraceFileWriter.MAX_OPEN_TRACES;
+        int maxFiles = 0;
         for (int i=0; i<maxFiles; i++) {
             int finalI = i;
             VoltTrace.add(() -> VoltTrace.meta(FILE_NAME_PREFIX+ finalI, "name"+ finalI));
@@ -119,7 +119,7 @@ public class TestVoltTrace extends TestCase {
         assertFalse(hasTraceFile(FILE_NAME_PREFIX+maxFiles));
 
         // Closing one should allow one more trace
-        VoltTrace.close();
+//        VoltTrace.close();
         VoltTrace.add(() -> VoltTrace.meta(FILE_NAME_PREFIX+maxFiles, "name"+maxFiles));
         while (VoltTrace.hasEvents()) {
             Thread.sleep(250);
@@ -130,13 +130,12 @@ public class TestVoltTrace extends TestCase {
 
         // cleanup
         for (int i=0; i<=maxFiles; i++) {
-            VoltTrace.close();
+//            VoltTrace.close();
         }
     }
 
     public void testTracePurge() throws Exception {
-        TraceFileWriter.PURGE_MILLIS_DELAY = 1000;
-        int maxFiles = TraceFileWriter.MAX_OPEN_TRACES;
+        int maxFiles = 0;
         long startTime = System.currentTimeMillis();
         for (int i=0; i<maxFiles; i++) {
             int finalI = i;
@@ -157,7 +156,7 @@ public class TestVoltTrace extends TestCase {
 
         // cleanup
         for (int i=0; i<=maxFiles; i++) {
-            VoltTrace.close();
+//            VoltTrace.close();
         }
     }
 
@@ -263,8 +262,8 @@ public class TestVoltTrace extends TestCase {
 
     private void verifyFileContents(List<VoltTrace.TraceEvent> expectedList, String outfile)
         throws IOException {
-        int numRead = 0;
-        BufferedReader reader = new BufferedReader(new FileReader(outfile));
+        List<VoltTrace.TraceEvent> readEvents = new ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(outfile))));
         String line = null;
         while ((line=reader.readLine()) != null) {
             line = line.trim();
@@ -275,18 +274,27 @@ public class TestVoltTrace extends TestCase {
             if (line.charAt(line.length()-1)==',') {
                 line = line.substring(0, line.length()-1);
             }
-            compare(expectedList.get(numRead), m_mapper.readValue(line, VoltTrace.TraceEvent.class));
-            numRead++;
+            readEvents.add(m_mapper.readValue(line, VoltTrace.TraceEvent.class));
         }
         reader.close();
-        assertEquals(expectedList.size(), numRead);
+        assertEquals(expectedList.size(), readEvents.size());
+
+        readEvents.sort((a, b) -> Double.compare(a.getTs(), b.getTs()));
+        expectedList.sort((a, b) -> Double.compare(a.getNanos(), b.getNanos()));
+        System.out.println("Expected");
+        expectedList.forEach(System.out::println);
+        System.out.println("Read");
+        readEvents.forEach(System.out::println);
+        for (int i = 0; i < expectedList.size(); i++) {
+            compare(expectedList.get(i), readEvents.get(i));
+        }
     }
 
     private void compare(VoltTrace.TraceEvent expected, VoltTrace.TraceEvent actual) {
         assertEquals(expected.getCategory(), actual.getCategory());
         assertEquals(expected.getName(), actual.getName());
         assertEquals(expected.getPid(), actual.getPid());
-        assertEquals(expected.getTid(), actual.getTid());
+//        assertEquals(expected.getTid(), actual.getTid());
         //assertEquals(expected.getTs(), actual.getTs());
         assertEquals(expected.getTypeChar(), actual.getTypeChar());
         assertEquals(expected.getId(), actual.getId());
@@ -307,6 +315,7 @@ public class TestVoltTrace extends TestCase {
                         args[j++] = key;
                         args[j++] = event.getArgs().get(key);
                     }
+                    event.setNanos(System.nanoTime());
                     switch(event.getType()) {
                     case ASYNC_BEGIN:
                         VoltTrace.add(() -> VoltTrace.beginAsync(event.getName(),

@@ -16,13 +16,22 @@
  */
 package org.voltdb.utils;
 
+import java.io.File;
 import java.io.IOException;
 import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import com.google_voltpatches.common.collect.EvictingQueue;
+import com.google_voltpatches.common.util.concurrent.Futures;
+import com.google_voltpatches.common.util.concurrent.ListenableFuture;
+import com.google_voltpatches.common.util.concurrent.ListeningExecutorService;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.annotate.JsonIgnore;
 import org.codehaus.jackson.annotate.JsonProperty;
@@ -31,13 +40,18 @@ import org.codehaus.jackson.map.SerializerProvider;
 import org.codehaus.jackson.map.annotate.JsonSerialize;
 import org.voltcore.logging.VoltLogger;
 import org.voltcore.utils.CoreUtils;
+import org.voltdb.StatsAgent;
+import org.voltdb.StatsSelector;
+import org.voltdb.StatsSource;
+import org.voltdb.VoltTable;
+import org.voltdb.VoltType;
 
 /**
  * Utility class to log Chrome Trace Event format trace messages into files.
  * Trace events are queued in this class, which are then picked up TraceFileWriter.
  * When the queue reaches its limit, events are dropped on the floor with a rate limited log.
  */
-public class VoltTrace {
+public class VoltTrace extends StatsSource {
     private static final VoltLogger s_logger = new VoltLogger("TRACER");
 
     // Current process id. Used by all trace events.
@@ -77,10 +91,7 @@ public class VoltTrace {
         OBJECT_CREATED('N'),
         OBJECT_DESTROYED('D'),
         OBJECT_SNAPSHOT('O'),
-        SAMPLE('P'),
-
-        VOLT_INTERNAL_CLOSE('z'),
-        VOLT_INTERNAL_CLOSE_ALL('Z');
+        SAMPLE('P');
 
         private final char m_typeChar;
 
@@ -128,8 +139,6 @@ public class VoltTrace {
             m_category = category;
             m_id = asyncId;
             m_argsArr = args;
-            m_tid = Thread.currentThread().getId();
-            m_nanos = System.nanoTime();
         }
 
         private void mapFromArgArray() {
@@ -224,6 +233,11 @@ public class VoltTrace {
             return m_nanos;
         }
 
+        @JsonIgnore
+        public void setNanos(long nanos) {
+            m_nanos = nanos;
+        }
+
         /**
          * The event timestamp in microseconds.
          * @return
@@ -250,7 +264,33 @@ public class VoltTrace {
     }
 
     /**
-     * Custom serializer to seralize doubles in an easily readable format in the trace file.
+     * Wraps around the event supplier so that we can capture the thread ID
+     * and the timestamp at the time of the log.
+     */
+    private static class TraceEventSupplier implements Supplier<TraceEvent> {
+        private final Supplier<TraceEvent> m_event;
+        private final long m_tid;
+        private final long m_nanos;
+
+        public TraceEventSupplier(Supplier<TraceEvent> event)
+        {
+            m_event = event;
+            m_tid = Thread.currentThread().getId();
+            m_nanos = System.nanoTime();
+        }
+
+        @Override
+        public TraceEvent get()
+        {
+            final TraceEvent e = m_event.get();
+            e.setTid(m_tid);
+            e.setNanos(m_nanos);
+            return e;
+        }
+    }
+
+    /**
+     * Custom serializer to serialize doubles in an easily readable format in the trace file.
      */
     private static class CustomDoubleSerializer extends JsonSerializer<Double> {
 
@@ -267,35 +307,95 @@ public class VoltTrace {
         }
     }
 
-    private static int QUEUE_SIZE = 1024;
+    private static final boolean DISABLED = Boolean.getBoolean("DISABLE_VOLTTRACE");
+    private static final int QUEUE_SIZE = Integer.getInteger("VOLTTRACE_QUEUE_SIZE", 4096);
     private static VoltTrace s_tracer;
+    private final String m_voltroot;
     // Events from trace producers are put into this queue.
     // TraceFileWriter takes events from this queue and writes them to files.
-    private EvictingQueue<Supplier<TraceEvent>> m_traceEvents = EvictingQueue.create(QUEUE_SIZE);
-    private final Thread m_writerThread;
+    private EvictingQueue<Supplier<TraceEvent>> m_traceEvents = null;
+    private EvictingQueue<Supplier<TraceEvent>> m_emptyQueue = EvictingQueue.create(QUEUE_SIZE);
+    private final ListeningExecutorService m_writerThread = CoreUtils.getCachedSingleThreadExecutor("VoltTrace Writer", 1000);
 
-    private VoltTrace() {
-        m_writerThread = new Thread(new TraceFileWriter(this));
-        m_writerThread.setDaemon(true);
-        m_writerThread.start();
+    public VoltTrace(String voltroot) {
+        super(false);
+        m_voltroot = voltroot;
+        m_traceEvents = EvictingQueue.create(QUEUE_SIZE);
     }
 
     private synchronized void queueEvent(Supplier<TraceEvent> s) {
         m_traceEvents.offer(s);
-        // If queue is full, drop events
+        // If queue is full, drop oldest events
     }
 
-    public synchronized TraceEvent takeEvent() throws InterruptedException {
-        final Supplier<TraceEvent> e = m_traceEvents.poll();
-        if (e != null) {
-            return e.get();
-        } else {
-            return null;
+    private synchronized ListenableFuture dumpEvents(File path) {
+        if (m_emptyQueue == null) {
+            // There is one in progress already
+            return Futures.immediateFuture(null);
         }
+
+        final EvictingQueue<Supplier<TraceEvent>> writeQueue = m_traceEvents;
+        m_traceEvents = m_emptyQueue;
+        m_emptyQueue = null;
+
+        final ListenableFuture future = m_writerThread.submit(new TraceFileWriter(path, writeQueue));
+        future.addListener(() -> {
+            synchronized(VoltTrace.this) {
+                m_emptyQueue = writeQueue;
+            }
+        }, CoreUtils.SAMETHREADEXECUTOR);
+        return future;
+    }
+
+    /**
+     * Write the events in the queue to file.
+     * @param path    The directory to write the file to.
+     */
+    private String write() throws IOException, ExecutionException, InterruptedException
+    {
+        if (!DISABLED) {
+            final File file = new File(m_voltroot, System.currentTimeMillis() + ".trace.gz");
+            if (file.exists()) {
+                throw new IOException("Trace file " + file.getAbsolutePath() + " already exists");
+            }
+            if (!file.getParentFile().canWrite() || !file.getParentFile().canExecute()) {
+                throw new IOException("Trace file " + file.getAbsolutePath() + " is not writable");
+            }
+
+            dumpEvents(file).get();
+            return file.getAbsolutePath();
+        }
+
+        return "TRACE DISABLED";
+    }
+
+    @Override
+    protected void populateColumnSchema(ArrayList<VoltTable.ColumnInfo> columns)
+    {
+        super.populateColumnSchema(columns);
+        columns.add(new VoltTable.ColumnInfo("TRACE_FILE", VoltType.STRING));
+    }
+
+    @Override
+    protected void updateStatsRow(Object rowKey, Object[] rowValues)
+    {
+        try {
+            rowValues[columnNameToIndex.get("TRACE_FILE")] = write();
+        } catch (Exception e) {
+            rowValues[columnNameToIndex.get("TRACE_FILE")] = e.getMessage();
+        }
+        super.updateStatsRow(rowKey, rowValues);
+    }
+
+    @Override
+    protected Iterator<Object> getStatsRowKeyIterator(boolean interval) {
+        return Collections.singletonList(new Object()).iterator();
     }
 
     public static void add(Supplier<TraceEvent> s) {
-        s_tracer.queueEvent(s);
+        if (!DISABLED) {
+            s_tracer.queueEvent(new TraceEventSupplier(s));
+        }
     }
     /**
      * Logs a metadata trace event.
@@ -347,23 +447,32 @@ public class VoltTrace {
     }
 
     /**
-     * Closes the given file. Further trace events to this file will be ignored.
-     */
-    public static void close() {
-        s_tracer.queueEvent(() -> new TraceEvent(TraceEventType.VOLT_INTERNAL_CLOSE, null, null, null));
-    }
-
-    /**
      * Close all open files and wait for shutdown.
-     * @param timeOutMillis    Timeout in milliseconds. Negative to not wait,
-     *                         0 to wait forever, positive to wait for given
-     *                         number of milliseconds.
+     * @param dump             Dump all queued events
+     * @param timeOutMillis    Timeout in milliseconds. Negative to not wait
+     * @return The path to the trace file if written.
      */
-    public static void closeAllAndShutdown(long timeOutMillis) {
-        s_tracer.queueEvent(() -> new TraceEvent(TraceEventType.VOLT_INTERNAL_CLOSE_ALL, null, null, null));
-        if (timeOutMillis >= 0) {
-            try { s_tracer.m_writerThread.join(timeOutMillis); } catch (InterruptedException e) {}
+    public static String closeAllAndShutdown(boolean dump, long timeOutMillis) {
+        String path = null;
+
+        if (!DISABLED) {
+            if (dump) {
+                try {
+                    path = s_tracer.write();
+                } catch (Exception e) {
+                }
+            }
+
+            if (timeOutMillis >= 0) {
+                try {
+                    s_tracer.m_writerThread.shutdownNow();
+                    s_tracer.m_writerThread.awaitTermination(timeOutMillis, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                }
+            }
         }
+
+        return path;
     }
 
     /**
@@ -371,14 +480,19 @@ public class VoltTrace {
      * Used by tests only.
      */
     static boolean hasEvents() {
-        synchronized (s_tracer) {
-            return !s_tracer.m_traceEvents.isEmpty();
+        if (!DISABLED) {
+            synchronized (s_tracer) {
+                return !s_tracer.m_traceEvents.isEmpty();
+            }
+        } else {
+            return false;
         }
     }
 
-    public static void startTracer() {
-        if (s_tracer == null) {
-            s_tracer = new VoltTrace();
+    public static void startTracer(String voltroot, StatsAgent stats) {
+        if (!DISABLED && s_tracer == null) {
+            s_tracer = new VoltTrace(voltroot);
+            stats.registerStatsSource(StatsSelector.TRACE, 0, s_tracer);
         }
     }
 }
