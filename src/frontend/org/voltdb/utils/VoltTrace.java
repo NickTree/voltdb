@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -51,7 +52,7 @@ import org.voltdb.VoltType;
  * Trace events are queued in this class, which are then picked up TraceFileWriter.
  * When the queue reaches its limit, events are dropped on the floor with a rate limited log.
  */
-public class VoltTrace extends StatsSource {
+public class VoltTrace extends StatsSource implements Runnable {
     private static final VoltLogger s_logger = new VoltLogger("TRACER");
 
     // Current process id. Used by all trace events.
@@ -261,6 +262,12 @@ public class VoltTrace extends StatsSource {
         public void setArgs(Map<String, String> args) {
             m_args = args;
         }
+
+        @Override
+        public String toString() {
+            return m_type + " " + m_name + " " + m_category + " " + m_id + " " + m_tid + " " + m_ts + " " +
+                   m_nanos + " " + m_args;
+        }
     }
 
     /**
@@ -317,18 +324,20 @@ public class VoltTrace extends StatsSource {
     private EvictingQueue<Supplier<TraceEvent>> m_emptyQueue = EvictingQueue.create(QUEUE_SIZE);
     private final ListeningExecutorService m_writerThread = CoreUtils.getCachedSingleThreadExecutor("VoltTrace Writer", 1000);
 
+    private final ConcurrentLinkedQueue<Runnable> m_work = new ConcurrentLinkedQueue<>();
+
     public VoltTrace(String voltroot) {
         super(false);
         m_voltroot = voltroot;
         m_traceEvents = EvictingQueue.create(QUEUE_SIZE);
     }
 
-    private synchronized void queueEvent(Supplier<TraceEvent> s) {
-        m_traceEvents.offer(s);
+    private void queueEvent(Supplier<TraceEvent> s) {
+        m_work.offer(() -> m_traceEvents.offer(s));
         // If queue is full, drop oldest events
     }
 
-    private synchronized ListenableFuture dumpEvents(File path) {
+    private ListenableFuture dumpEvents(File path) {
         if (m_emptyQueue == null) {
             // There is one in progress already
             return Futures.immediateFuture(null);
@@ -340,9 +349,7 @@ public class VoltTrace extends StatsSource {
 
         final ListenableFuture future = m_writerThread.submit(new TraceFileWriter(path, writeQueue));
         future.addListener(() -> {
-            synchronized(VoltTrace.this) {
-                m_emptyQueue = writeQueue;
-            }
+            m_work.offer(() -> m_emptyQueue = writeQueue);
         }, CoreUtils.SAMETHREADEXECUTOR);
         return future;
     }
@@ -362,7 +369,11 @@ public class VoltTrace extends StatsSource {
                 throw new IOException("Trace file " + file.getAbsolutePath() + " is not writable");
             }
 
-            dumpEvents(file).get();
+            m_work.offer(() -> {
+                try {
+                    dumpEvents(file).get();
+                } catch (Exception e) {}
+            });
             return file.getAbsolutePath();
         }
 
@@ -390,6 +401,20 @@ public class VoltTrace extends StatsSource {
     @Override
     protected Iterator<Object> getStatsRowKeyIterator(boolean interval) {
         return Collections.singletonList(new Object()).iterator();
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            final Runnable work = m_work.poll();
+            if (work == null) {
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException e) {}
+            } else {
+                work.run();
+            }
+        }
     }
 
     public static void add(Supplier<TraceEvent> s) {
@@ -493,6 +518,9 @@ public class VoltTrace extends StatsSource {
         if (!DISABLED && s_tracer == null) {
             s_tracer = new VoltTrace(voltroot);
             stats.registerStatsSource(StatsSelector.TRACE, 0, s_tracer);
+            final Thread thread = new Thread(s_tracer);
+            thread.setDaemon(true);
+            thread.start();
         }
     }
 }
