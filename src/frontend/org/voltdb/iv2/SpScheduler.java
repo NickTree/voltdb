@@ -588,6 +588,7 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(10000)));
         VoltTrace.add(() -> VoltTrace.beginAsync("initsp", VoltTrace.Category.SPI,
                                                  MiscUtils.hsIdPairTxnIdToString(m_mailbox.getHSId(), m_mailbox.getHSId(), msg.getSpHandle()),
+                                                 "ciHandle", Long.toString(msg.getClientInterfaceHandle()),
                                                  "txnId", TxnEgo.txnIdToString(msg.getTxnId()),
                                                  "partition", Integer.toString(m_partitionId),
                                                  "hsId", CoreUtils.hsIdToString(m_mailbox.getHSId())));
@@ -613,7 +614,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             //the transaction will be delivered again by the CL for execution once durable
             //Async command logging has to offer the task immediately with a Future for backpressure
             if (m_cl.canOfferTask()) {
-                assert durabilityBackpressureFuture != null;
                 m_pendingTasks.offer(task.setDurabilityBackpressureFuture(durabilityBackpressureFuture));
             }
         } else {
@@ -982,7 +982,6 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
             //the transaction will be delivered again by the CL for execution once durable
             //Async command logging has to offer the task immediately with a Future for backpressure
             if (m_cl.canOfferTask()) {
-                assert durabilityBackpressureFuture != null;
                 m_pendingTasks.offer(task.setDurabilityBackpressureFuture(durabilityBackpressureFuture));
             } else {
                 /* Getting here means that the task is the first fragment of an MP txn and
@@ -1013,9 +1012,8 @@ public class SpScheduler extends Scheduler implements SnapshotCompletionInterest
         if (pendingTasks != null) {
             for (TransactionTask task : pendingTasks) {
                 if (task instanceof SpProcedureTask) {
-                    final Iv2InitiateTaskMessage msg = (Iv2InitiateTaskMessage) task.getTransactionState().getNotice();
                     VoltTrace.add(() -> VoltTrace.endAsync("durability", VoltTrace.Category.SPI,
-                                                           MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), msg.getSpHandle())));
+                                                           MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), task.getSpHandle())));
                 } else if (task instanceof FragmentTask) {
                     VoltTrace.add(() -> VoltTrace.endAsync("durability", VoltTrace.Category.SPI,
                                                            MiscUtils.hsIdTxnIdToString(m_mailbox.getHSId(), ((FragmentTask) task).m_fragmentMsg.getSpHandle())));

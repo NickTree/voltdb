@@ -260,7 +260,8 @@ public class MpScheduler extends Scheduler
         VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(100)));
         VoltTrace.add(() -> VoltTrace.beginAsync("initmp", VoltTrace.Category.MPI, mpTxnId,
-                                                 "txnId", TxnEgo.txnIdToString(mpTxnId)));
+                                                 "txnId", TxnEgo.txnIdToString(mpTxnId),
+                                                 "ciHandle", Long.toString(message.getClientInterfaceHandle())));
 
         // Don't have an SP HANDLE at the MPI, so fill in the unused value
         Iv2Trace.logIv2InitiateTaskMessage(message, m_mailbox.getHSId(), mpTxnId, Long.MIN_VALUE);

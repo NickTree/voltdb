@@ -63,10 +63,9 @@ public class SpProcedureTask extends ProcedureTask
 
     @Override
     protected void durabilityTraceEnd() {
-        final Iv2InitiateTaskMessage msg = (Iv2InitiateTaskMessage) getTransactionState().getNotice();
-            VoltTrace.add(() -> VoltTrace.endAsync("durability",
-                                                   VoltTrace.Category.SPI,
-                                                   MiscUtils.hsIdTxnIdToString(m_initiator.getHSId(), msg.getSpHandle())));
+        VoltTrace.add(() -> VoltTrace.endAsync("durability",
+                                               VoltTrace.Category.SPI,
+                                               MiscUtils.hsIdTxnIdToString(m_initiator.getHSId(), getSpHandle())));
     }
 
     /** Run is invoked by a run-loop to execute this transaction. */

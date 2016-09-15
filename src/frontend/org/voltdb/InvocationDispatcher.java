@@ -270,7 +270,8 @@ public final class InvocationDispatcher {
         VoltTrace.add(() -> VoltTrace.meta("process_name", "name", CoreUtils.getHostnameOrAddress()));
         VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1)));
-        VoltTrace.add(() -> VoltTrace.beginAsync("recvtxn", VoltTrace.Category.CI, task.getClientHandle()));
+        VoltTrace.add(() -> VoltTrace.beginAsync("recvtxn", VoltTrace.Category.CI, task.getClientHandle(),
+                                                 "clientHandle", Long.toString(task.getClientHandle())));
 
         Procedure catProc = getProcedureFromName(task.getProcName(), catalogContext);
 
@@ -1107,8 +1108,8 @@ public final class InvocationDispatcher {
     private final void dispatchAdHocCommon(StoredProcedureInvocation task,
             InvocationClientHandler handler, Connection ccxn, ExplainMode explainMode,
             String sql, Object[] userParams, Object[] userPartitionKey, AuthSystem.AuthUser user) {
-        VoltTrace.add(() -> VoltTrace.beginAsync("planadhoc", VoltTrace.Category.CI,
-                                                 task.getClientHandle(),
+        VoltTrace.add(() -> VoltTrace.beginAsync("planadhoc", VoltTrace.Category.CI, task.getClientHandle(),
+                                                 "clientHandle", Long.toString(task.getClientHandle()),
                                                  "sql", sql));
 
         List<String> sqlStatements = SQLLexer.splitStatements(sql);
@@ -1594,6 +1595,7 @@ public final class InvocationDispatcher {
         Long finalInitiatorHSId = initiatorHSId;
         VoltTrace.add(() -> VoltTrace.instantAsync("inittxn", VoltTrace.Category.CI,
                                                    invocation.getClientHandle(),
+                                                   "clientHandle", Long.toString(invocation.getClientHandle()),
                                                    "ciHandle", Long.toString(handle),
                                                    "partition", Integer.toString(partition),
                                                    "dest", CoreUtils.hsIdToString(finalInitiatorHSId)));
