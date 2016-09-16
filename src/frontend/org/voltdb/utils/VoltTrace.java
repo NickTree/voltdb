@@ -24,8 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -33,12 +33,14 @@ import com.google_voltpatches.common.collect.EvictingQueue;
 import com.google_voltpatches.common.util.concurrent.Futures;
 import com.google_voltpatches.common.util.concurrent.ListenableFuture;
 import com.google_voltpatches.common.util.concurrent.ListeningExecutorService;
+import com.google_voltpatches.common.util.concurrent.SettableFuture;
 import org.codehaus.jackson.JsonGenerator;
 import org.codehaus.jackson.annotate.JsonIgnore;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.map.JsonSerializer;
 import org.codehaus.jackson.map.SerializerProvider;
 import org.codehaus.jackson.map.annotate.JsonSerialize;
+import org.eclipse.jetty.util.ConcurrentArrayQueue;
 import org.voltcore.logging.VoltLogger;
 import org.voltcore.utils.CoreUtils;
 import org.voltdb.StatsAgent;
@@ -314,9 +316,9 @@ public class VoltTrace extends StatsSource implements Runnable {
         }
     }
 
-    private static final boolean DISABLED = Boolean.getBoolean("DISABLE_VOLTTRACE");
     private static final int QUEUE_SIZE = Integer.getInteger("VOLTTRACE_QUEUE_SIZE", 4096);
-    private static VoltTrace s_tracer;
+    private static volatile VoltTrace s_tracer;
+
     private final String m_voltroot;
     // Events from trace producers are put into this queue.
     // TraceFileWriter takes events from this queue and writes them to files.
@@ -324,12 +326,20 @@ public class VoltTrace extends StatsSource implements Runnable {
     private EvictingQueue<Supplier<TraceEvent>> m_emptyQueue = EvictingQueue.create(QUEUE_SIZE);
     private final ListeningExecutorService m_writerThread = CoreUtils.getCachedSingleThreadExecutor("VoltTrace Writer", 1000);
 
-    private final ConcurrentLinkedQueue<Runnable> m_work = new ConcurrentLinkedQueue<>();
+    private volatile boolean m_shutdown = false;
+    private volatile Runnable m_shutdownCallback = null;
+
+    private final ConcurrentArrayQueue<Runnable> m_work = new ConcurrentArrayQueue<>();
 
     public VoltTrace(String voltroot) {
         super(false);
         m_voltroot = voltroot;
         m_traceEvents = EvictingQueue.create(QUEUE_SIZE);
+    }
+
+    private void registerStats(StatsAgent stats) {
+        stats.registerStatsSource(StatsSelector.TRACE, 0, this);
+        m_shutdownCallback = () -> stats.deregisterStatsSourcesFor(StatsSelector.TRACE, 0);
     }
 
     private void queueEvent(Supplier<TraceEvent> s) {
@@ -348,9 +358,7 @@ public class VoltTrace extends StatsSource implements Runnable {
         m_emptyQueue = null;
 
         final ListenableFuture future = m_writerThread.submit(new TraceFileWriter(path, writeQueue));
-        future.addListener(() -> {
-            m_work.offer(() -> m_emptyQueue = writeQueue);
-        }, CoreUtils.SAMETHREADEXECUTOR);
+        future.addListener(() -> m_work.offer(() -> m_emptyQueue = writeQueue), CoreUtils.SAMETHREADEXECUTOR);
         return future;
     }
 
@@ -358,38 +366,29 @@ public class VoltTrace extends StatsSource implements Runnable {
      * Write the events in the queue to file.
      * @param path    The directory to write the file to.
      */
-    private String write() throws IOException, ExecutionException, InterruptedException
-    {
-        if (!DISABLED) {
-            final File file = new File(m_voltroot, System.currentTimeMillis() + ".trace.gz");
-            if (file.exists()) {
-                throw new IOException("Trace file " + file.getAbsolutePath() + " already exists");
-            }
-            if (!file.getParentFile().canWrite() || !file.getParentFile().canExecute()) {
-                throw new IOException("Trace file " + file.getAbsolutePath() + " is not writable");
-            }
-
-            m_work.offer(() -> {
-                try {
-                    dumpEvents(file).get();
-                } catch (Exception e) {}
-            });
-            return file.getAbsolutePath();
+    private String write() throws IOException, ExecutionException, InterruptedException {
+        final File file = new File(m_voltroot, System.currentTimeMillis() + ".trace.gz");
+        if (file.exists()) {
+            throw new IOException("Trace file " + file.getAbsolutePath() + " already exists");
+        }
+        if (!file.getParentFile().canWrite() || !file.getParentFile().canExecute()) {
+            throw new IOException("Trace file " + file.getAbsolutePath() + " is not writable");
         }
 
-        return "TRACE DISABLED";
+        SettableFuture<Future> f = SettableFuture.create();
+        m_work.offer(() -> f.set(dumpEvents(file)));
+        f.get().get(); // Wait for the write to finish without blocking new events
+        return file.getAbsolutePath();
     }
 
     @Override
-    protected void populateColumnSchema(ArrayList<VoltTable.ColumnInfo> columns)
-    {
+    protected void populateColumnSchema(ArrayList<VoltTable.ColumnInfo> columns) {
         super.populateColumnSchema(columns);
         columns.add(new VoltTable.ColumnInfo("TRACE_FILE", VoltType.STRING));
     }
 
     @Override
-    protected void updateStatsRow(Object rowKey, Object[] rowValues)
-    {
+    protected void updateStatsRow(Object rowKey, Object[] rowValues) {
         try {
             rowValues[columnNameToIndex.get("TRACE_FILE")] = write();
         } catch (Exception e) {
@@ -405,21 +404,31 @@ public class VoltTrace extends StatsSource implements Runnable {
 
     @Override
     public void run() {
-        while (true) {
-            final Runnable work = m_work.poll();
-            if (work == null) {
-                try {
-                    Thread.sleep(10);
-                } catch (InterruptedException e) {}
-            } else {
-                work.run();
-            }
+        while (!m_shutdown) {
+            try {
+                final Runnable work = m_work.poll();
+                if (work != null) {
+                    work.run();
+                } else {
+                    Thread.yield();
+                }
+            } catch (Throwable t) {}
         }
     }
 
+    private void shutdown() {
+        if (m_shutdownCallback != null) {
+            try {
+                m_shutdownCallback.run();
+            } catch (Throwable t) {}
+        }
+        m_shutdown = true;
+    }
+
     public static void add(Supplier<TraceEvent> s) {
-        if (!DISABLED) {
-            s_tracer.queueEvent(new TraceEventSupplier(s));
+        final VoltTrace tracer = s_tracer;
+        if (tracer != null) {
+            tracer.queueEvent(new TraceEventSupplier(s));
         }
     }
     /**
@@ -479,48 +488,40 @@ public class VoltTrace extends StatsSource implements Runnable {
      */
     public static String closeAllAndShutdown(boolean dump, long timeOutMillis) {
         String path = null;
+        final VoltTrace tracer = s_tracer;
 
-        if (!DISABLED) {
+        if (tracer != null) {
+            s_tracer = null;
+
             if (dump) {
                 try {
-                    path = s_tracer.write();
+                    path = tracer.write();
                 } catch (Exception e) {
                 }
             }
 
             if (timeOutMillis >= 0) {
                 try {
-                    s_tracer.m_writerThread.shutdownNow();
-                    s_tracer.m_writerThread.awaitTermination(timeOutMillis, TimeUnit.MILLISECONDS);
+                    tracer.m_writerThread.shutdownNow();
+                    tracer.m_writerThread.awaitTermination(timeOutMillis, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
                 }
             }
+
+            tracer.shutdown();
         }
 
         return path;
     }
 
-    /**
-     * Returns true if there are events in the tracer's queue. False otherwise.
-     * Used by tests only.
-     */
-    static boolean hasEvents() {
-        if (!DISABLED) {
-            synchronized (s_tracer) {
-                return !s_tracer.m_traceEvents.isEmpty();
-            }
-        } else {
-            return false;
-        }
-    }
-
     public static void startTracer(String voltroot, StatsAgent stats) {
-        if (!DISABLED && s_tracer == null) {
-            s_tracer = new VoltTrace(voltroot);
-            stats.registerStatsSource(StatsSelector.TRACE, 0, s_tracer);
-            final Thread thread = new Thread(s_tracer);
+        if (s_tracer == null) {
+            final VoltTrace tracer = new VoltTrace(voltroot);
+            final Thread thread = new Thread(tracer);
             thread.setDaemon(true);
             thread.start();
+            tracer.registerStats(stats);
+            s_tracer = tracer;
         }
     }
 }
