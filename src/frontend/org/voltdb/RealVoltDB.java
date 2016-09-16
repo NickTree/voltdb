@@ -3213,7 +3213,6 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             }
         }
         startResourceUsageMonitor();
-        VoltTrace.startTracer(getVoltDBRootPath(), getStatsAgent());
 
         try {
             if (m_adminListener != null) {
@@ -3417,7 +3416,6 @@ public class RealVoltDB implements VoltDBInterface, RestoreAgent.Callback, HostM
             // Start listening on the DR ports
             prepareReplication();
             startResourceUsageMonitor();
-            VoltTrace.startTracer(getVoltDBRootPath(), getStatsAgent());
 
             // Allow export datasources to start consuming their binary deques safely
             // as at this juncture the initial truncation snapshot is already complete

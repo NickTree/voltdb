@@ -271,6 +271,7 @@ public final class InvocationDispatcher {
         VoltTrace.add(() -> VoltTrace.meta("thread_name", "name", threadName));
         VoltTrace.add(() -> VoltTrace.meta("thread_sort_index", "sort_index", Integer.toString(1)));
         VoltTrace.add(() -> VoltTrace.beginAsync("recvtxn", VoltTrace.Category.CI, task.getClientHandle(),
+                                                 "name", task.getProcName(),
                                                  "clientHandle", Long.toString(task.getClientHandle())));
 
         Procedure catProc = getProcedureFromName(task.getProcName(), catalogContext);
